@@ -1,0 +1,7 @@
+{
+  "name": "Focus Pet",
+  "description": "Virtual Pet that turns screen-free focus time into pet growth, rewards, and healthy digital habits.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
