@@ -1,0 +1,17 @@
+{
+  "name": "focus-pet-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Research data tooling for the Focus Pet study. Kept out of the web app so firebase-admin never reaches the browser bundle.",
+  "scripts": {
+    "export": "node export-research-data.mjs --key ./serviceAccount.json"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.4.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
+  "comment_overrides": "uuid is pinned at 9.x deep under gaxios (via @google-cloud/storage) and carries a moderate advisory. Nothing here uses Cloud Storage, but the override removes the finding rather than leaving it to be re-triaged every time someone runs npm audit."
+}

@@ -19,3 +19,8 @@ debug.keystore
 
 # Firebase CLI deploy cache
 .firebase/
+
+# Firebase emulator artifacts
+firestore-debug.log
+ui-debug.log
+firebase-debug.log
