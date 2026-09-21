@@ -35,15 +35,30 @@ describe('growth line', () => {
     }
   })
 
-  it('gives every form a name, a description and its own look', () => {
+  it('gives every form a name, a description and its own silhouette', () => {
     for (const form of GROWTH_FORMS) {
       expect(form.name.length).toBeGreaterThan(0)
       expect(form.description.length).toBeGreaterThan(10)
     }
     const looks = GROWTH_FORMS.map((f) =>
-      [f.visual.palette.join('/'), f.visual.body, f.visual.crown, f.visual.idle].join('|'),
+      [f.shape.body, f.shape.crown, f.shape.particle, f.shape.idle, f.shape.aura].join('|'),
     )
     expect(new Set(looks).size).toBe(looks.length)
+  })
+
+  it('carries no colour, so growing up cannot overwrite the chosen species', () => {
+    // Palette used to live on the form, which silently discarded the colour
+    // picked during onboarding. This fails if it is ever put back.
+    for (const form of GROWTH_FORMS) {
+      expect(Object.keys(form.shape).sort()).toEqual([
+        'aura',
+        'body',
+        'crown',
+        'idle',
+        'particle',
+      ])
+      expect(JSON.stringify(form)).not.toMatch(/#[0-9a-f]{6}/i)
+    }
   })
 })
 

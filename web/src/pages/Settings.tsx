@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { ConsentSheet, ParticipantIdStep } from '../components/ConsentSheet'
+import { ConsentSheet, ParticipantIdIssued } from '../components/ConsentSheet'
 import { FloatingShapes } from '../components/Decor'
+import { SpeciesPicker } from '../components/Overlays'
 import { Button, Card, SectionTitle, TextInput } from '../components/ui'
 import { RESEARCH_CONTACT_EMAIL } from '../lib/consent'
-import { HAPTIC, accentAt } from '../lib/design'
+import { HAPTIC, accentAt, haptic } from '../lib/design'
 import type { EnrolmentStatus } from '../lib/types'
 import { useAppStore } from '../store/useAppStore'
 
@@ -22,8 +23,16 @@ const STATUS_COLOR: Record<EnrolmentStatus, string> = {
 }
 
 export function Settings() {
-  const { profile, pet, renamePet, setParticipantId, logOut, giveConsent, withdrawFromStudy } =
-    useAppStore()
+  const {
+    profile,
+    pet,
+    renamePet,
+    setSpecies,
+    issueParticipantId,
+    logOut,
+    giveConsent,
+    withdrawFromStudy,
+  } = useAppStore()
 
   const [name, setName] = useState(pet.name)
   const [claiming, setClaiming] = useState(false)
@@ -35,6 +44,14 @@ export function Settings() {
   const status: EnrolmentStatus = enrolment?.status ?? 'undecided'
   const idLocked = Boolean(enrolment?.participantIdSetAt)
   const needsId = status === 'consented' && !profile?.participantId
+
+  async function issueCode() {
+    setClaiming(true)
+    setClaimError(undefined)
+    const result = await issueParticipantId()
+    setClaiming(false)
+    if (!result.ok) setClaimError(result.message)
+  }
 
   return (
     <div className="space-y-7">
@@ -96,11 +113,7 @@ export function Settings() {
           {status === 'consented' && (
             <>
               <dl className="mt-4 space-y-2 text-sm">
-                <Row
-                  label="รหัสผู้เข้าร่วม"
-                  value={profile?.participantId || 'ยังไม่ได้ใส่'}
-                  accent={1}
-                />
+                <CodeRow code={profile?.participantId ?? ''} />
                 <Row
                   label="ยินยอมเมื่อ"
                   value={
@@ -118,14 +131,14 @@ export function Settings() {
                   className="mt-4 rounded-xl border-2 border-dashed px-3 py-2 text-xs leading-relaxed font-bold"
                   style={{ borderColor: '#FF6B35', color: '#FF6B35' }}
                 >
-                  ⚠️ ยังไม่ได้ใส่รหัสผู้เข้าร่วม ข้อมูลของคุณจะยังไม่ถูกนำไปวิเคราะห์
+                  ⚠️ ยังไม่มีรหัสผู้เข้าร่วม ข้อมูลของคุณจะยังไม่ถูกนำไปวิเคราะห์
                 </p>
               )}
 
               {idLocked && (
                 <p className="mt-3 text-[11px] leading-relaxed text-white/50">
-                  รหัสถูกล็อกไว้เพื่อรักษาความถูกต้องของข้อมูล หากกรอกผิดกรุณาติดต่อ{' '}
-                  {RESEARCH_CONTACT_EMAIL}
+                  นำรหัสนี้ไปกรอกในแบบสอบถามของงานวิจัย รหัสออกให้ครั้งเดียวและเปลี่ยนไม่ได้{' '}
+                  หากมีปัญหาติดต่อ {RESEARCH_CONTACT_EMAIL}
                 </p>
               )}
             </>
@@ -151,8 +164,15 @@ export function Settings() {
 
           <div className="mt-5 space-y-2">
             {needsId && !showSheet && (
-              <Button accent={1} className="w-full" onClick={() => setShowSheet(true)}>
-                ใส่รหัสผู้เข้าร่วม
+              <Button
+                accent={1}
+                className="w-full"
+                onClick={() => {
+                  setShowSheet(true)
+                  void issueCode()
+                }}
+              >
+                ขอรหัสผู้เข้าร่วม
               </Button>
             )}
 
@@ -227,24 +247,33 @@ export function Settings() {
         )}
 
         {showSheet && needsId && (
-          <ParticipantIdStep
+          <ParticipantIdIssued
+            code={profile?.participantId || null}
             busy={claiming}
             error={claimError}
-            onSkip={() => setShowSheet(false)}
-            onSubmit={async (code) => {
-              setClaiming(true)
-              setClaimError(undefined)
-              const result = await setParticipantId(code)
-              setClaiming(false)
-              if (result.ok) setShowSheet(false)
-              else setClaimError(result.message)
-            }}
+            onRetry={() => void issueCode()}
+            onContinue={() => setShowSheet(false)}
           />
         )}
       </section>
 
       <section className="space-y-3">
-        <SectionTitle accent={2}>ตั้งชื่อสัตว์เลี้ยง</SectionTitle>
+        <SectionTitle accent={2}>สีของสัตว์เลี้ยง</SectionTitle>
+        <Card accent={2}>
+          <p className="text-sm leading-snug text-white/75">
+            เปลี่ยนได้ตลอดเวลา สีไม่มีผลต่อความยากง่ายหรือข้อมูลวิจัย
+          </p>
+          <div className="mt-4">
+            <SpeciesPicker
+              selected={pet.species}
+              onSelect={(next) => void setSpecies(next)}
+            />
+          </div>
+        </Card>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle accent={3}>ตั้งชื่อสัตว์เลี้ยง</SectionTitle>
         <Card accent={2}>
           <div className="flex gap-2">
             <div className="flex-1">
@@ -296,6 +325,52 @@ export function Settings() {
           </dl>
         </Card>
       </section>
+    </div>
+  )
+}
+
+/**
+ * The participant code with a copy button. It is the one value in here people
+ * have to transcribe onto a questionnaire, so it gets larger type, letter
+ * spacing and one tap to copy rather than being a row of small text.
+ */
+function CodeRow({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    if (!code) return
+    haptic(HAPTIC.success)
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard access is blocked in some browsers; the code stays on screen.
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2 border-b-2 border-dashed border-white/10 pb-2">
+      <dt className="text-xs font-black tracking-widest text-white/60 uppercase">รหัสผู้เข้าร่วม</dt>
+      <dd className="flex items-center gap-2">
+        <span
+          className="text-lg font-black tracking-[0.1em]"
+          style={{ fontFamily: 'var(--font-display)', color: accentAt(1) }}
+        >
+          {code || 'ยังไม่มี'}
+        </span>
+        {code && (
+          <button
+            type="button"
+            onClick={() => void copy()}
+            aria-label="คัดลอกรหัส"
+            className="rounded-lg border-2 px-2 py-0.5 text-[10px] font-black transition-transform active:scale-90"
+            style={{ borderColor: accentAt(2), color: accentAt(2) }}
+          >
+            {copied ? '✓' : '📋'}
+          </button>
+        )}
+      </dd>
     </div>
   )
 }

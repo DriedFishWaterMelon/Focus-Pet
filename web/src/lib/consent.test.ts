@@ -1,66 +1,48 @@
 import { describe, expect, it } from 'vitest'
-import { CONSENT_CHECKS, CONSENT_SHEET, CONSENT_VERSION, validateParticipantId } from './consent'
+import {
+  CODE_PREFIX,
+  CONSENT_CHECKS,
+  CONSENT_SHEET,
+  CONSENT_VERSION,
+  generateParticipantId,
+  isGeneratedId,
+} from './consent'
 
 // The participant code is the only link between what the app records and the
-// paper questionnaires. A code that normalises inconsistently splits one
-// person's data across several records, and nobody notices until analysis.
+// paper questionnaires, and it is now issued rather than typed. What matters is
+// that it comes out in a shape a person can copy by hand without ambiguity, and
+// that it does not collide often enough to make the retry loop routine.
 
-describe('validateParticipantId', () => {
-  it('accepts a well-formed code', () => {
-    expect(validateParticipantId('P001')).toEqual({ ok: true, value: 'P001' })
-  })
-
-  it('normalises case and surrounding whitespace', () => {
-    expect(validateParticipantId('  p001 ').value).toBe('P001')
-  })
-
-  it('normalises Thai digits', () => {
-    // Thai keyboards produce these, and a participant copying from a paper slip
-    // may well type them. Left alone, P๐๐๑ and P001 become two participants.
-    expect(validateParticipantId('P๐๐๑').value).toBe('P001')
-    expect(validateParticipantId('๑๒๓').value).toBe('123')
-  })
-
-  it('normalises inner spaces and underscores to a hyphen', () => {
-    expect(validateParticipantId('G8 001').value).toBe('G8-001')
-    expect(validateParticipantId('G8_001').value).toBe('G8-001')
-  })
-
-  it('treats the normalised forms of one code as identical', () => {
-    const forms = ['P001', 'p001', ' P001 ', 'P๐๐๑']
-    const normalised = new Set(forms.map((f) => validateParticipantId(f).value))
-    expect(normalised.size).toBe(1)
-  })
-
-  it('rejects an empty code', () => {
-    expect(validateParticipantId('').ok).toBe(false)
-    expect(validateParticipantId('   ').ok).toBe(false)
-  })
-
-  it('rejects a code with no digits', () => {
-    // Guards against someone typing their name into the field.
-    expect(validateParticipantId('SOMCHAI').ok).toBe(false)
-  })
-
-  it('rejects Thai letters and punctuation', () => {
-    expect(validateParticipantId('รหัส1').ok).toBe(false)
-    expect(validateParticipantId('P001!').ok).toBe(false)
-    expect(validateParticipantId('P@01').ok).toBe(false)
-  })
-
-  it('rejects codes outside the length limits', () => {
-    expect(validateParticipantId('1').ok).toBe(false)
-    expect(validateParticipantId('P0000000000000001').ok).toBe(false)
-  })
-
-  it('accepts hyphenated team formats', () => {
-    expect(validateParticipantId('g8-001').value).toBe('G8-001')
-  })
-
-  it('never returns a value when it rejects', () => {
-    for (const bad of ['', 'ABC', 'รหัส', 'P@1', '1']) {
-      expect(validateParticipantId(bad).value).toBe('')
+describe('generateParticipantId', () => {
+  it('produces a code in the documented shape', () => {
+    for (let i = 0; i < 200; i++) {
+      const code = generateParticipantId()
+      expect(code).toMatch(/^FP-[A-Z0-9]{5}$/)
+      expect(isGeneratedId(code)).toBe(true)
+      expect(code.startsWith(`${CODE_PREFIX}-`)).toBe(true)
     }
+  })
+
+  it('never emits characters that are confusable on paper', () => {
+    // Participants copy this onto a questionnaire by hand, so 1/I/L and 0/O
+    // must not be able to appear at all.
+    for (let i = 0; i < 500; i++) {
+      expect(generateParticipantId()).not.toMatch(/[ILOU01]/)
+    }
+  })
+
+  it('does not repeat itself across many draws', () => {
+    // Not a uniqueness guarantee — that is the transactional claim's job — but
+    // a generator that collided often would make the retry loop the norm.
+    const codes = new Set(Array.from({ length: 2000 }, generateParticipantId))
+    expect(codes.size).toBe(2000)
+  })
+
+  it('rejects codes that this app did not issue', () => {
+    expect(isGeneratedId('P001')).toBe(false)
+    expect(isGeneratedId('FP-ABC')).toBe(false)
+    expect(isGeneratedId('FP-ILOU1')).toBe(false)
+    expect(isGeneratedId('')).toBe(false)
   })
 })
 

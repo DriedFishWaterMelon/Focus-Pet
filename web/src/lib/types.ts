@@ -45,26 +45,41 @@ export const PET_MOOD_INFO: Record<PetMood, { emoji: string; label: string }> = 
 
 export type PetSpecies = 'leaf' | 'flame' | 'water' | 'stone'
 
+export type PetPalette = readonly [string, string]
+
+/**
+ * Species is purely the pet's colour, and it is the one visual thing the player
+ * owns: growth changes the silhouette, never the palette.
+ *
+ * Both were baked into the growth forms at first, which quietly discarded the
+ * colour chosen during onboarding — the pet always came out the form's colour
+ * and the picker did nothing.
+ */
 export const SPECIES_INFO: Record<
   PetSpecies,
-  { name: string; color: string; description: string }
+  { name: string; palette: PetPalette; description: string }
 > = {
-  leaf: { name: 'หน่อไม้ใบเขียว', color: '#10b981', description: 'ใจเย็น โตสม่ำเสมอ' },
-  flame: { name: 'เปลวไฟน้อย', color: '#f59e0b', description: 'กระตือรือร้น ชอบท้าทาย' },
-  water: { name: 'หยดน้ำใส', color: '#0ea5e9', description: 'อ่อนโยน ปรับตัวเก่ง' },
-  stone: { name: 'ก้อนหินมีชีวิต', color: '#8b5cf6', description: 'อดทน ไม่ยอมแพ้ง่าย' },
+  leaf: { name: 'เขียวใบไม้', palette: ['#10B981', '#84CC16'], description: 'สดชื่น เป็นธรรมชาติ' },
+  flame: { name: 'ส้มเปลวไฟ', palette: ['#FF6B35', '#FFE600'], description: 'อบอุ่น มีพลัง' },
+  water: { name: 'ฟ้าสายน้ำ', palette: ['#0EA5E9', '#00F5D4'], description: 'เย็นสบาย ใสสะอาด' },
+  stone: { name: 'ม่วงศิลา', palette: ['#7B2FFF', '#A78BFA'], description: 'ลึกลับ สง่างาม' },
+}
+
+export function paletteOf(species: PetSpecies): PetPalette {
+  return (SPECIES_INFO[species] ?? SPECIES_INFO.leaf).palette
 }
 
 /**
- * Visual traits a form is drawn from.
+ * The silhouette a growth form is drawn from — shape only, no colour.
  *
- * Fifteen hand-drawn pets would be fifteen things to keep in sync, so each form
- * instead declares which body, crown, particle, idle motion and aura it uses and
- * PetCanvas composes them. Adding a form is a data change, not a drawing.
+ * Hand-drawing every form would be several things to keep in sync, so each one
+ * declares which body, crown, particle, idle motion and aura it uses and
+ * PetArt composes them. Adding a form is a data change, not a drawing.
+ *
+ * Colour deliberately lives outside this: it comes from the species the player
+ * picked, so growing up never overwrites their choice.
  */
-export interface PetVisual {
-  /** Body colour and accent. */
-  palette: [string, string]
+export interface PetShape {
   body: 'blob' | 'round' | 'tall' | 'wisp' | 'crystal'
   crown: 'none' | 'sprout' | 'leaf' | 'petal' | 'branch' | 'spike' | 'halo' | 'bloom'
   particle: 'none' | 'sparkle' | 'petal' | 'leaf' | 'dew' | 'star' | 'mist'

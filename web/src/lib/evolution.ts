@@ -8,9 +8,12 @@
 // from the Android app and covered by its tests — so a participant sees the
 // same stage on both clients and the achievements that key on PetStage keep
 // working untouched.
+//
+// Forms carry shape only. Colour comes from the species the player chose, so
+// growing up changes the silhouette and never overwrites their palette.
 
 import { stageFromLevel } from './gameLogic'
-import type { Pet, PetStage, PetVisual } from './types'
+import type { Pet, PetShape, PetStage } from './types'
 
 export interface GrowthForm {
   stage: PetStage
@@ -18,7 +21,7 @@ export interface GrowthForm {
   description: string
   /** Level at which this form appears. Mirrors stageFromLevel. */
   level: number
-  visual: PetVisual
+  shape: PetShape
 }
 
 /** The growth line, in order. */
@@ -28,8 +31,7 @@ export const GROWTH_FORMS: GrowthForm[] = [
     name: 'เมล็ดน้อย',
     description: 'เพิ่งงอกออกมา ยังเล็กและต้องการการดูแลใกล้ชิด',
     level: 1,
-    visual: {
-      palette: ['#10B981', '#34D399'],
+    shape: {
       body: 'blob',
       crown: 'sprout',
       particle: 'none',
@@ -42,8 +44,7 @@ export const GROWTH_FORMS: GrowthForm[] = [
     name: 'หน่อซุกซน',
     description: 'แตกใบอ่อนแล้ว เริ่มแข็งแรงและอยากรู้อยากเห็น',
     level: 3,
-    visual: {
-      palette: ['#FFE600', '#FF6B35'],
+    shape: {
       body: 'blob',
       crown: 'leaf',
       particle: 'sparkle',
@@ -56,8 +57,7 @@ export const GROWTH_FORMS: GrowthForm[] = [
     name: 'ผกาบาน',
     description: 'ผลิดอกครั้งแรก เป็นสัญญาณว่าการดูแลของคุณได้ผล',
     level: 6,
-    visual: {
-      palette: ['#FF3AF2', '#FB7185'],
+    shape: {
       body: 'round',
       crown: 'petal',
       particle: 'petal',
@@ -70,8 +70,7 @@ export const GROWTH_FORMS: GrowthForm[] = [
     name: 'ร่มไทรใหญ่',
     description: 'แผ่กิ่งก้านมั่นคง รากหยั่งลึกจนไม่มีอะไรสั่นคลอนได้',
     level: 10,
-    visual: {
-      palette: ['#059669', '#84CC16'],
+    shape: {
       body: 'tall',
       crown: 'branch',
       particle: 'leaf',
@@ -84,8 +83,7 @@ export const GROWTH_FORMS: GrowthForm[] = [
     name: 'วิญญาณสวรรค์',
     description: 'เปล่งแสงได้เอง ร่างสูงสุดของการเดินทางครั้งนี้',
     level: 15,
-    visual: {
-      palette: ['#00F5D4', '#FFE600'],
+    shape: {
       body: 'crystal',
       crown: 'bloom',
       particle: 'star',

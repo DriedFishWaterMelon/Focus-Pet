@@ -51,7 +51,7 @@ export const CONSENT_SHEET: ConsentSection[] = [
       'เวลาเริ่มและจบของแต่ละเซสชันปลอดหน้าจอ ระยะเวลา และประเภทกิจกรรมที่ท่านเลือก',
       'เวลาหน้าจอรายวันที่ท่านกรอกเข้ามาเอง',
       'สถานะในเกม เช่น เลเวล ความคืบหน้า และจำนวนวันที่ทำต่อเนื่อง',
-      'รหัสผู้เข้าร่วมที่ทีมวิจัยกำหนดให้ ใช้จับคู่ข้อมูลในระบบกับคำตอบแบบสอบถาม',
+      'รหัสผู้เข้าร่วมแบบนิรนามที่ระบบออกให้อัตโนมัติ ใช้จับคู่ข้อมูลในระบบกับคำตอบแบบสอบถาม ไม่ได้ผูกกับชื่อหรืออีเมลของท่าน',
     ],
   },
   {
@@ -107,46 +107,41 @@ export const CONSENT_CHECKS = [
 // Participant ID
 // ---------------------------------------------------------------------------
 
-export interface IdValidation {
-  ok: boolean
-  /** The normalised code to store. Empty when invalid. */
-  value: string
-  error?: string
-}
+/**
+ * Alphabet for generated codes.
+ *
+ * Crockford-style: no I, L, O or U, so a code read off a screen and written on
+ * a paper questionnaire cannot be confused between 1/I/L or 0/O. U is dropped
+ * as well because it makes unfortunate words out of random letters.
+ */
+const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ'
+
+export const CODE_PREFIX = 'FP'
+const CODE_LENGTH = 5
 
 /**
- * Validates and normalises a participant code.
+ * Generates a participant code.
  *
- * Codes are assigned on paper by the research team, so the field has to survive
- * a person typing what is on their slip: stray spaces, lowercase, and the Thai
- * digits some keyboards produce. Everything is normalised to one canonical form
- * before storage, because "p001", "P001 " and "P๐๐๑" arriving as three distinct
- * codes would split one participant's data across three records.
+ * Codes used to be assigned on paper and typed in, which confused people and
+ * risked two participants entering the same one. The app issues them instead:
+ * the participant never types anything, and the code is still short enough to
+ * copy onto a questionnaire by hand.
+ *
+ * The space is 30^5 ≈ 24 million, so for a study of about a hundred people a
+ * collision is vanishingly unlikely — and the claim is transactional anyway, so
+ * the one that does happen is retried rather than silently merging two people.
  */
-export function validateParticipantId(raw: string): IdValidation {
-  const thaiDigits = '๐๑๒๓๔๕๖๗๘๙'
-  const normalised = raw
-    .trim()
-    .replace(/[๐-๙]/g, (d) => String(thaiDigits.indexOf(d)))
-    .replace(/[\s_]+/g, '-')
-    .toUpperCase()
+export function generateParticipantId(): string {
+  const bytes = new Uint32Array(CODE_LENGTH)
+  crypto.getRandomValues(bytes)
+  let code = ''
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
+  }
+  return `${CODE_PREFIX}-${code}`
+}
 
-  if (normalised.length === 0) {
-    return { ok: false, value: '', error: 'กรุณากรอกรหัสผู้เข้าร่วม' }
-  }
-  if (normalised.length < 2 || normalised.length > 16) {
-    return { ok: false, value: '', error: 'รหัสต้องมีความยาว 2–16 ตัวอักษร' }
-  }
-  if (!/^[A-Z0-9-]+$/.test(normalised)) {
-    return {
-      ok: false,
-      value: '',
-      error: 'ใช้ได้เฉพาะตัวอักษรภาษาอังกฤษ ตัวเลข และขีดกลาง',
-    }
-  }
-  if (!/[0-9]/.test(normalised)) {
-    return { ok: false, value: '', error: 'รหัสต้องมีตัวเลขอย่างน้อยหนึ่งตัว' }
-  }
-
-  return { ok: true, value: normalised }
+/** True when a code looks like one this app issued. */
+export function isGeneratedId(code: string): boolean {
+  return new RegExp(`^${CODE_PREFIX}-[${CODE_ALPHABET}]{${CODE_LENGTH}}$`).test(code)
 }

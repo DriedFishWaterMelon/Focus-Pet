@@ -9,6 +9,7 @@ import {
   levelsUntilNextForm,
   nextForm,
 } from '../lib/evolution'
+import { paletteOf } from '../lib/types'
 import type { Pet } from '../lib/types'
 
 /**
@@ -24,8 +25,8 @@ import type { Pet } from '../lib/types'
  */
 export function GrowthPreviewButton({ pet }: { pet: Pet }) {
   const [open, setOpen] = useState(false)
-  const form = currentForm(pet)
   const toNext = levelsUntilNextForm(pet)
+  const palette = paletteOf(pet.species)
 
   return (
     <>
@@ -38,8 +39,8 @@ export function GrowthPreviewButton({ pet }: { pet: Pet }) {
         className="mx-auto flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-[11px] font-black tracking-widest uppercase transition-transform active:scale-90"
         style={{
           fontFamily: 'var(--font-display)',
-          borderColor: form.visual.palette[1],
-          color: form.visual.palette[1],
+          borderColor: palette[1],
+          color: palette[1],
         }}
       >
         <span aria-hidden>🌱</span>
@@ -55,14 +56,17 @@ function GrowthPreviewModal({ pet, onClose }: { pet: Pet; onClose: () => void })
   const form = currentForm(pet)
   const upcoming = nextForm(pet)
   const toNext = levelsUntilNextForm(pet)
+  // Every form in the line is shown in the player's own colour, so the preview
+  // answers "what will mine look like" rather than showing a stranger.
+  const palette = paletteOf(pet.species)
 
   return (
     <Modal onClose={onClose} accent={1}>
       <div className="text-center">
-        <PetPortrait visual={form.visual} tier={GROWTH_FORMS.indexOf(form)} size={120} />
+        <PetPortrait shape={form.shape} palette={palette} tier={GROWTH_FORMS.indexOf(form)} size={120} />
         <h2
           className="ts-1 mt-1 text-2xl font-black uppercase"
-          style={{ fontFamily: 'var(--font-display)', color: form.visual.palette[0] }}
+          style={{ fontFamily: 'var(--font-display)', color: palette[0] }}
         >
           {form.name}
         </h2>
@@ -83,7 +87,7 @@ function GrowthPreviewModal({ pet, onClose }: { pet: Pet; onClose: () => void })
         {GROWTH_FORMS.map((entry, i) => {
           const reached = hasReached(pet, entry)
           const isCurrent = entry.stage === form.stage
-          const color = entry.visual.palette[0]
+          const color = palette[0]
 
           return (
             <div
@@ -96,7 +100,8 @@ function GrowthPreviewModal({ pet, onClose }: { pet: Pet; onClose: () => void })
               }}
             >
               <PetPortrait
-                visual={entry.visual}
+                shape={entry.shape}
+                palette={palette}
                 tier={i}
                 size={46}
                 still

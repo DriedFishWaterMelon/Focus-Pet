@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Button, Card, TextInput } from './ui'
+import { Button, Card } from './ui'
 import { HAPTIC, accentAt, clashAt, haptic } from '../lib/design'
 import {
   CONSENT_CHECKS,
@@ -7,7 +7,6 @@ import {
   CONSENT_VERSION,
   CONTACT_IS_PLACEHOLDER,
   RESEARCH_CONTACT_EMAIL,
-  validateParticipantId,
 } from '../lib/consent'
 
 /**
@@ -176,27 +175,40 @@ export function ConsentSheet({
 }
 
 /**
- * Participant code entry.
+ * The issued participant code.
  *
- * The code links in-app behaviour to the paper questionnaires, so a typo here
- * silently orphans a participant's data. The field validates and normalises
- * before it will submit, and the claim itself is rejected server-side if the
- * code already belongs to someone else.
+ * Nothing is typed. Codes used to be handed out on paper and entered by hand,
+ * which confused people and risked two participants entering the same one; the
+ * app issues a unique code instead and the participant only has to copy it onto
+ * their questionnaire.
  */
-export function ParticipantIdStep({
-  onSubmit,
-  onSkip,
+export function ParticipantIdIssued({
+  code,
   busy = false,
   error,
+  onRetry,
+  onContinue,
 }: {
-  onSubmit: (code: string) => void
-  onSkip: () => void
+  code: string | null
   busy?: boolean
   error?: string
+  onRetry: () => void
+  onContinue: () => void
 }) {
-  const [value, setValue] = useState('')
-  const validation = validateParticipantId(value)
-  const showHint = value.trim().length > 0 && !validation.ok
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    if (!code) return
+    haptic(HAPTIC.success)
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard access is blocked in some browsers; the code is on screen
+      // anyway, so this is not worth interrupting anyone over.
+    }
+  }
 
   return (
     <Card accent={1} className="p-5">
@@ -204,34 +216,33 @@ export function ParticipantIdStep({
         className="ts-2 text-3xl font-black uppercase"
         style={{ fontFamily: 'var(--font-display)', color: accentAt(1) }}
       >
-        รหัสผู้เข้าร่วม
+        รหัสของคุณ
       </h2>
       <p className="mt-2 text-sm leading-relaxed text-white/80">
-        กรอกรหัสที่ทีมวิจัยมอบให้ เช่น <strong style={{ color: accentAt(1) }}>P001</strong>{' '}
-        รหัสนี้ใช้จับคู่ข้อมูลในแอปกับคำตอบแบบสอบถามของท่าน โดยไม่ต้องเปิดเผยชื่อจริง
+        ระบบออกรหัสนิรนามให้อัตโนมัติ ใช้จับคู่ข้อมูลในแอปกับคำตอบแบบสอบถามของท่าน
+        โดยไม่ต้องเปิดเผยชื่อจริง
       </p>
 
-      <div className="mt-4">
-        <TextInput
-          accent={1}
-          value={value}
-          onChange={setValue}
-          placeholder="P001"
-          maxLength={16}
-          onEnter={() => validation.ok && !busy && onSubmit(value)}
-        />
+      <div
+        className="mt-4 rounded-2xl border-4 border-dashed p-5 text-center"
+        style={{ borderColor: accentAt(2), background: `${accentAt(1)}1A` }}
+      >
+        {busy && !code ? (
+          <p className="text-lg font-black text-white/60">กำลังออกรหัส…</p>
+        ) : code ? (
+          <p
+            className="ts-1 text-4xl font-black tracking-[0.15em] tabular-nums"
+            style={{ fontFamily: 'var(--font-display)', color: accentAt(2) }}
+          >
+            {code}
+          </p>
+        ) : (
+          <p className="text-sm font-bold" style={{ color: '#FF6B35' }}>
+            ยังออกรหัสไม่สำเร็จ
+          </p>
+        )}
       </div>
 
-      {showHint && (
-        <p className="mt-2 text-xs font-bold" style={{ color: '#FF6B35' }}>
-          {validation.error}
-        </p>
-      )}
-      {validation.ok && validation.value !== value.trim() && (
-        <p className="mt-2 text-xs font-bold" style={{ color: accentAt(1) }}>
-          จะบันทึกเป็น {validation.value}
-        </p>
-      )}
       {error && (
         <p
           className="mt-3 rounded-xl border-2 border-dashed px-3 py-2 text-xs font-bold"
@@ -243,31 +254,28 @@ export function ParticipantIdStep({
 
       <p
         className="mt-4 rounded-xl border-2 border-dashed px-3 py-2 text-[11px] leading-relaxed font-bold"
-        style={{ borderColor: accentAt(2), color: accentAt(2) }}
+        style={{ borderColor: accentAt(3), color: accentAt(3) }}
       >
-        ⚠️ รหัสตั้งได้ครั้งเดียวและแก้ไขเองไม่ได้ กรุณาตรวจสอบให้ถูกต้องก่อนบันทึก
+        📝 จดรหัสนี้ไว้ หรือกดคัดลอก แล้วนำไปกรอกในแบบสอบถามของงานวิจัย
+        ดูรหัสย้อนหลังได้ที่หน้าตั้งค่าเสมอ
       </p>
 
       <div className="mt-5 space-y-2">
-        <Button
-          accent={1}
-          className="w-full py-4"
-          disabled={!validation.ok || busy}
-          vibrate={HAPTIC.success}
-          onClick={() => onSubmit(value)}
-        >
-          {busy ? 'กำลังบันทึก…' : 'บันทึกรหัส'}
-        </Button>
-        <Button accent={3} variant="ghost" className="w-full" disabled={busy} onClick={onSkip}>
-          ยังไม่มีรหัส ขอใส่ทีหลัง
-        </Button>
+        {code ? (
+          <>
+            <Button accent={1} variant="outline" className="w-full" onClick={() => void copy()}>
+              {copied ? '✓ คัดลอกแล้ว' : '📋 คัดลอกรหัส'}
+            </Button>
+            <Button accent={2} className="w-full py-4" onClick={onContinue}>
+              จดแล้ว ไปต่อ
+            </Button>
+          </>
+        ) : (
+          <Button accent={1} className="w-full py-4" disabled={busy} onClick={onRetry}>
+            {busy ? 'กำลังออกรหัส…' : 'ลองออกรหัสอีกครั้ง'}
+          </Button>
+        )}
       </div>
-
-      <p className="mt-2 text-center text-[11px] leading-relaxed text-white/50">
-        หากข้ามตอนนี้ ข้อมูลของท่านจะยังไม่ถูกนำไปวิเคราะห์
-        <br />
-        จนกว่าจะใส่รหัสในหน้าตั้งค่า
-      </p>
     </Card>
   )
 }

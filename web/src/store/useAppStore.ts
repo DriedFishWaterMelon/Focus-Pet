@@ -100,10 +100,12 @@ interface AppState {
   pat: () => Promise<void>
   purchase: (itemId: string) => Promise<void>
   renamePet: (name: string) => Promise<void>
+  setSpecies: (species: PetSpecies) => Promise<void>
   giveConsent: () => Promise<void>
   declineConsent: () => Promise<void>
   withdrawFromStudy: () => Promise<void>
-  setParticipantId: (id: string) => Promise<{ ok: boolean; message?: string }>
+  /** Issues a generated participant code. Takes no input — see consent.ts. */
+  issueParticipantId: () => Promise<{ ok: boolean; message?: string }>
 
   pushToast: (message: string, tone?: Toast['tone']) => void
   dismissToast: (id: number) => void
@@ -428,6 +430,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().pushToast('เปลี่ยนชื่อแล้ว', 'success')
   },
 
+  // Colour is cosmetic and changeable at any time. It never touches level,
+  // stats or anything the research data is derived from.
+  setSpecies: async (species) => {
+    if (get().pet.species === species) return
+    await get().persistPet({ ...get().pet, species })
+    get().pushToast('เปลี่ยนสีแล้ว', 'success')
+  },
+
   giveConsent: async () => {
     const profile = get().profile
     if (!profile) return
@@ -451,11 +461,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().pushToast('ถอนตัวแล้ว ระบบหยุดบันทึกข้อมูลวิจัย', 'info')
   },
 
-  setParticipantId: async (id) => {
+  issueParticipantId: async () => {
     const profile = get().profile
     if (!profile) return { ok: false, message: 'ยังไม่ได้เข้าสู่ระบบ' }
 
-    const result = await claimParticipantId(profile.uid, id, profile.enrolment)
+    const result = await claimParticipantId(profile.uid, profile.enrolment)
     if (!result.ok) {
       get().pushToast(result.message, 'warning')
       return { ok: false, message: result.message }
@@ -468,7 +478,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         enrolment: { ...profile.enrolment, participantIdSetAt: Date.now() },
       },
     })
-    get().pushToast(`บันทึกรหัส ${result.participantId} แล้ว`, 'success')
     return { ok: true }
   },
 

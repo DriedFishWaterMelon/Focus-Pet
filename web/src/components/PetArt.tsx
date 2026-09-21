@@ -1,21 +1,34 @@
-import type { PetVisual } from '../lib/types'
+import type { PetPalette, PetShape } from '../lib/types'
 
 // Composable pet artwork.
 //
-// Each evolution form declares traits (body, crown, particle, aura) and this
-// module draws them. Fifteen bespoke SVGs would be fifteen things to keep in
-// sync every time the eyes or the sick expression changed; here a new form is
-// a row of data and it inherits every fix automatically.
+// Each growth form declares its shape (body, crown, particle, aura) and this
+// module draws it in the palette the player picked. Bespoke SVGs per form would
+// be several things to keep in sync every time the eyes or the sick expression
+// changed; here a new form is a row of data and it inherits every fix.
+//
+// Shape and palette are separate arguments on purpose: growth changes the
+// silhouette, the species changes the colour, and neither overwrites the other.
 //
 // All pieces draw inside a 200x200 viewBox with the body centred near (100,120)
 // and the head near (100,82), matching the original Compose canvas.
 
-export function Aura({ visual, alive, focus }: { visual: PetVisual; alive: boolean; focus: boolean }) {
-  if (!alive || visual.aura === 'none') return null
-  const [body, accent] = visual.palette
-  const id = `aura-${visual.body}-${visual.crown}`
+export function Aura({
+  shape,
+  palette,
+  alive,
+  focus,
+}: {
+  shape: PetShape
+  palette: PetPalette
+  alive: boolean
+  focus: boolean
+}) {
+  if (!alive || shape.aura === 'none') return null
+  const [body, accent] = palette
+  const id = `aura-${shape.body}-${shape.crown}-${body.slice(1)}`
 
-  if (visual.aura === 'ring') {
+  if (shape.aura === 'ring') {
     return (
       <g aria-hidden>
         <circle
@@ -34,7 +47,7 @@ export function Aura({ visual, alive, focus }: { visual: PetVisual; alive: boole
     )
   }
 
-  if (visual.aura === 'rays') {
+  if (shape.aura === 'rays') {
     return (
       <g aria-hidden className="art-spin-slow" style={{ transformOrigin: '100px 100px' }}>
         {Array.from({ length: 12 }, (_, i) => (
@@ -58,14 +71,14 @@ export function Aura({ visual, alive, focus }: { visual: PetVisual; alive: boole
     <g aria-hidden>
       <defs>
         <radialGradient id={id}>
-          <stop offset="0%" stopColor={body} stopOpacity={visual.aura === 'strong' ? 0.8 : 0.5} />
+          <stop offset="0%" stopColor={body} stopOpacity={shape.aura === 'strong' ? 0.8 : 0.5} />
           <stop offset="100%" stopColor={body} stopOpacity="0" />
         </radialGradient>
       </defs>
       <circle
         cx="100"
         cy="105"
-        r={visual.aura === 'strong' ? 92 : 80}
+        r={shape.aura === 'strong' ? 92 : 80}
         fill={`url(#${id})`}
         className={focus ? 'animate-pulse-glow' : 'art-breathe-soft'}
         style={{ transformOrigin: '100px 105px' }}
@@ -74,10 +87,10 @@ export function Aura({ visual, alive, focus }: { visual: PetVisual; alive: boole
   )
 }
 
-export function Body({ visual }: { visual: PetVisual }) {
-  const [body, accent] = visual.palette
+export function Body({ shape, palette }: { shape: PetShape; palette: PetPalette }) {
+  const [body, accent] = palette
 
-  switch (visual.body) {
+  switch (shape.body) {
     case 'tall':
       return (
         <g>
@@ -134,10 +147,10 @@ export function Body({ visual }: { visual: PetVisual }) {
   }
 }
 
-export function Crown({ visual }: { visual: PetVisual }) {
-  const [body, accent] = visual.palette
+export function Crown({ shape, palette }: { shape: PetShape; palette: PetPalette }) {
+  const [body, accent] = palette
 
-  switch (visual.crown) {
+  switch (shape.crown) {
     case 'sprout':
       return (
         <g className="art-sway-slow" style={{ transformOrigin: '100px 56px' }}>
@@ -239,7 +252,7 @@ export function Crown({ visual }: { visual: PetVisual }) {
   }
 }
 
-const PARTICLE_GLYPH: Record<PetVisual['particle'], string> = {
+const PARTICLE_GLYPH: Record<PetShape['particle'], string> = {
   none: '',
   sparkle: '✦',
   petal: '❁',
@@ -250,10 +263,18 @@ const PARTICLE_GLYPH: Record<PetVisual['particle'], string> = {
 }
 
 /** Ambient specks that drift around the pet, unique per form. */
-export function Particles({ visual, alive }: { visual: PetVisual; alive: boolean }) {
-  if (!alive || visual.particle === 'none') return null
-  const glyph = PARTICLE_GLYPH[visual.particle]
-  const [, accent] = visual.palette
+export function Particles({
+  shape,
+  palette,
+  alive,
+}: {
+  shape: PetShape
+  palette: PetPalette
+  alive: boolean
+}) {
+  if (!alive || shape.particle === 'none') return null
+  const glyph = PARTICLE_GLYPH[shape.particle]
+  const [, accent] = palette
 
   // Fixed offsets rather than random ones, so specks stay put across renders.
   const spots = [
@@ -286,8 +307,8 @@ export function Particles({ visual, alive }: { visual: PetVisual; alive: boolean
 }
 
 /** Maps a form's idle trait to the class that animates its body. */
-export function idleClass(visual: PetVisual): string {
-  switch (visual.idle) {
+export function idleClass(shape: PetShape): string {
+  switch (shape.idle) {
     case 'sway':
       return 'art-sway'
     case 'float':

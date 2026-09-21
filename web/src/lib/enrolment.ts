@@ -1,6 +1,6 @@
 import { doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db, paths } from './firebase'
-import { CONSENT_VERSION, validateParticipantId } from './consent'
+import { CONSENT_VERSION, generateParticipantId } from './consent'
 import type { Enrolment } from './types'
 
 // Enrolment writes, kept apart from the game store because they are the part of
@@ -8,72 +8,65 @@ import type { Enrolment } from './types'
 
 export type ClaimResult =
   | { ok: true; participantId: string }
-  | { ok: false; reason: 'invalid' | 'taken' | 'already-set' | 'error'; message: string }
+  | { ok: false; reason: 'already-set' | 'exhausted' | 'error'; message: string }
+
+/** How many fresh codes to try before giving up. */
+const MAX_ATTEMPTS = 5
 
 /**
- * Claims a participant code for the signed-in user.
+ * Issues a participant code to the signed-in user.
  *
- * Codes must be unique across the study: if two people both type P001 their
- * records merge into one participant and neither set of data can be trusted.
- * Checking uniqueness by reading other users is impossible by design — the
- * security rules forbid it — so each code gets its own document in a dedicated
- * `participantIds` collection, and the claim is a transaction that fails if the
- * document already exists.
+ * Codes must be unique across the study: two participants sharing one would
+ * merge into a single record and neither set of data could be trusted.
+ * Uniqueness cannot be checked by reading other users — the security rules
+ * forbid exactly that — so each code gets its own document in a dedicated
+ * `participantIds` collection and the claim is a transaction that fails if the
+ * document already exists. On that failure a new code is generated and retried,
+ * so a collision costs a round trip rather than corrupting the dataset.
  *
- * The claim document holds no personal data, only the timestamp, so a user
- * being able to see whether a code is taken reveals nothing about who took it.
+ * The claim document holds no personal data beyond the owner and a timestamp,
+ * so being able to see that a code is taken reveals nothing about who took it.
  */
 export async function claimParticipantId(
   uid: string,
-  raw: string,
   currentEnrolment: Enrolment,
 ): Promise<ClaimResult> {
   if (currentEnrolment.participantIdSetAt) {
     return {
       ok: false,
       reason: 'already-set',
-      message: 'รหัสถูกตั้งไว้แล้วและแก้ไขเองไม่ได้ หากกรอกผิดกรุณาติดต่อทีมวิจัย',
+      message: 'มีรหัสอยู่แล้ว',
     }
   }
 
-  const validation = validateParticipantId(raw)
-  if (!validation.ok) {
-    return { ok: false, reason: 'invalid', message: validation.error ?? 'รหัสไม่ถูกต้อง' }
-  }
-
-  const code = validation.value
-  const claimRef = doc(db, paths.participantId(code))
   const userRef = doc(db, paths.user(uid))
 
-  try {
-    await runTransaction(db, async (tx) => {
-      const existing = await tx.get(claimRef)
-      if (existing.exists()) {
-        // Re-claiming your own code is harmless; anyone else's is not.
-        if (existing.data()?.uid !== uid) throw new Error('TAKEN')
-        return
-      }
-      tx.set(claimRef, { uid, claimedAt: serverTimestamp() })
-      tx.set(
-        userRef,
-        { participantId: code, participantIdSetAt: Date.now() },
-        { merge: true },
-      )
-    })
-    return { ok: true, participantId: code }
-  } catch (error) {
-    if ((error as Error).message === 'TAKEN') {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const code = generateParticipantId()
+    const claimRef = doc(db, paths.participantId(code))
+
+    try {
+      await runTransaction(db, async (tx) => {
+        const existing = await tx.get(claimRef)
+        if (existing.exists() && existing.data()?.uid !== uid) throw new Error('TAKEN')
+        tx.set(claimRef, { uid, claimedAt: serverTimestamp() })
+        tx.set(userRef, { participantId: code, participantIdSetAt: Date.now() }, { merge: true })
+      })
+      return { ok: true, participantId: code }
+    } catch (error) {
+      if ((error as Error).message === 'TAKEN') continue
       return {
         ok: false,
-        reason: 'taken',
-        message: 'รหัสนี้ถูกใช้ไปแล้ว กรุณาตรวจสอบรหัสที่ทีมวิจัยให้มาอีกครั้ง',
+        reason: 'error',
+        message: 'ออกรหัสไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
       }
     }
-    return {
-      ok: false,
-      reason: 'error',
-      message: 'บันทึกรหัสไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
-    }
+  }
+
+  return {
+    ok: false,
+    reason: 'exhausted',
+    message: 'ออกรหัสไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
   }
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Burst, ScreenFlash } from './Burst'
 import { BackgroundWord, FloatingShapes, Marquee } from './Decor'
 import { PetCanvas } from './PetCanvas'
-import { ConsentSheet, ParticipantIdStep } from './ConsentSheet'
+import { ConsentSheet, ParticipantIdIssued } from './ConsentSheet'
 import { Button, Card, Modal, TextInput } from './ui'
 import { HAPTIC, accentAt, clashAt, haptic, readableOn } from '../lib/design'
 import { defaultPet } from '../lib/gameLogic'
@@ -12,7 +12,8 @@ import { useAppStore } from '../store/useAppStore'
 
 const SPECIES_ORDER: PetSpecies[] = ['leaf', 'flame', 'water', 'stone']
 
-function SpeciesPicker({
+/** Colour picker, shared by onboarding and Settings. */
+export function SpeciesPicker({
   selected,
   onSelect,
 }: {
@@ -21,8 +22,9 @@ function SpeciesPicker({
 }) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      {SPECIES_ORDER.map((key, i) => {
+      {SPECIES_ORDER.map((key) => {
         const info = SPECIES_INFO[key]
+        const [primary, accent] = info.palette
         const active = selected === key
         return (
           <button
@@ -36,19 +38,19 @@ function SpeciesPicker({
               active ? 'scale-105 -rotate-2' : 'hover:scale-[1.03]'
             }`}
             style={{
-              borderColor: active ? clashAt(i) : info.color,
-              background: active ? `${info.color}44` : 'rgba(45,27,78,0.6)',
-              boxShadow: active ? `5px 5px 0 ${info.color}` : 'none',
+              borderColor: active ? accent : primary,
+              background: active ? `${primary}44` : 'rgba(45,27,78,0.6)',
+              boxShadow: active ? `5px 5px 0 ${primary}` : 'none',
             }}
           >
             <span
               aria-hidden
               className={`mb-2 block h-9 w-9 rounded-full border-4 ${active ? 'animate-bounce-subtle' : ''}`}
-              style={{ background: info.color, borderColor: clashAt(i + 1) }}
+              style={{ background: `linear-gradient(135deg, ${primary}, ${accent})`, borderColor: accent }}
             />
             <p
               className="text-sm font-black uppercase"
-              style={{ fontFamily: 'var(--font-display)', color: info.color }}
+              style={{ fontFamily: 'var(--font-display)', color: primary }}
             >
               {info.name}
             </p>
@@ -82,7 +84,8 @@ export function Onboarding() {
   const completeOnboarding = useAppStore((s) => s.completeOnboarding)
   const giveConsent = useAppStore((s) => s.giveConsent)
   const declineConsent = useAppStore((s) => s.declineConsent)
-  const setParticipantId = useAppStore((s) => s.setParticipantId)
+  const issueParticipantId = useAppStore((s) => s.issueParticipantId)
+  const issuedCode = useAppStore((s) => s.profile?.participantId ?? null)
   const [step, setStep] = useState<Step>('intro')
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState<string | undefined>(undefined)
@@ -91,6 +94,14 @@ export function Onboarding() {
   const [saving, setSaving] = useState(false)
 
   const preview = defaultPet({ name: name.trim() || 'เจ้าตัวน้อย', species })
+
+  async function issueCode() {
+    setClaiming(true)
+    setClaimError(undefined)
+    const result = await issueParticipantId()
+    setClaiming(false)
+    if (!result.ok) setClaimError(result.message)
+  }
 
   function finish() {
     setSaving(true)
@@ -114,8 +125,8 @@ export function Onboarding() {
             onAgree={async () => {
               setClaiming(true)
               await giveConsent()
-              setClaiming(false)
               setStep('participantId')
+              await issueCode()
             }}
             onDecline={async () => {
               setClaiming(true)
@@ -127,18 +138,12 @@ export function Onboarding() {
         )}
 
         {step === 'participantId' && (
-          <ParticipantIdStep
+          <ParticipantIdIssued
+            code={issuedCode || null}
             busy={claiming}
             error={claimError}
-            onSkip={() => setStep('species')}
-            onSubmit={async (code) => {
-              setClaiming(true)
-              setClaimError(undefined)
-              const result = await setParticipantId(code)
-              setClaiming(false)
-              if (result.ok) setStep('species')
-              else setClaimError(result.message)
-            }}
+            onRetry={() => void issueCode()}
+            onContinue={() => setStep('species')}
           />
         )}
 
@@ -182,10 +187,10 @@ export function Onboarding() {
                 className="ts-2 text-3xl font-black uppercase"
                 style={{ fontFamily: 'var(--font-display)', color: accentAt(1) }}
               >
-                เลือกเพื่อน
+                เลือกสี
               </h2>
               <p className="mt-1 text-xs font-bold text-white/60">
-                สายพันธุ์มีผลแค่หน้าตา ไม่มีผลต่อความยากง่าย
+                เปลี่ยนทีหลังได้ในหน้าตั้งค่า ไม่มีผลต่อความยากง่าย
               </p>
               <div className="my-4">
                 <PetCanvas pet={preview} compact />

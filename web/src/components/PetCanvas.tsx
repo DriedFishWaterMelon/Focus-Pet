@@ -3,8 +3,8 @@ import { Aura, Body, Crown, Particles, idleClass } from './PetArt'
 import { HAPTIC, accentAt, haptic } from '../lib/design'
 import { GROWTH_FORMS, currentForm } from '../lib/evolution'
 import { moodOf } from '../lib/gameLogic'
-import { PET_MOOD_INFO } from '../lib/types'
-import type { Pet, PetVisual } from '../lib/types'
+import { PET_MOOD_INFO, paletteOf } from '../lib/types'
+import type { Pet, PetPalette, PetShape } from '../lib/types'
 
 // The pet.
 //
@@ -22,9 +22,11 @@ interface Props {
   compact?: boolean
   /** Calm mode strips decoration during an active session. */
   calm?: boolean
-  /** Render a specific form instead of the pet's own, for the tree preview. */
-  previewVisual?: PetVisual
+  /** Render a specific form instead of the pet's own, for the growth preview. */
+  previewShape?: PetShape
   previewTier?: number
+  /** Override the colour, for previewing a species before committing to it. */
+  previewPalette?: PetPalette
 }
 
 export function PetCanvas({
@@ -33,12 +35,16 @@ export function PetCanvas({
   onPat,
   compact = false,
   calm = false,
-  previewVisual,
+  previewShape,
   previewTier,
+  previewPalette,
 }: Props) {
   const form = currentForm(pet)
-  const visual = previewVisual ?? form.visual
+  const shape = previewShape ?? form.shape
   const tier = previewTier ?? GROWTH_FORMS.indexOf(form)
+  // Colour follows the species, never the growth form, so levelling up never
+  // silently replaces the palette the player picked.
+  const palette = previewPalette ?? paletteOf(pet.species)
   const mood = isFocusActive && pet.isAlive ? 'MEDITATING' : moodOf(pet)
 
   const alive = pet.isAlive
@@ -98,7 +104,7 @@ export function PetCanvas({
       ? 'pet-react'
       : ailing
         ? 'pet-weak'
-        : idleClass(visual)
+        : idleClass(shape)
 
   return (
     <div className="relative flex flex-col items-center gap-3">
@@ -113,15 +119,15 @@ export function PetCanvas({
           <svg viewBox="0 0 200 200" className={sizeClass} role="img">
             <title>{`${pet.name}, ${form.name}, ${PET_MOOD_INFO[mood].label}`}</title>
 
-            {decorated && <Aura visual={visual} alive={alive} focus={isFocusActive} />}
+            {decorated && <Aura shape={shape} palette={palette} alive={alive} focus={isFocusActive} />}
 
             <g
               transform={`translate(100 105) scale(${scale}) translate(-100 -105)`}
               className={bodyClass}
               style={{ transformOrigin: '100px 130px' }}
             >
-              <Crown visual={visual} />
-              <Body visual={visual} />
+              <Crown shape={shape} palette={palette} />
+              <Body shape={shape} palette={palette} />
 
               {/* Face — identical across every form so mood always reads. */}
               {dead ? (
@@ -163,7 +169,7 @@ export function PetCanvas({
               )}
             </g>
 
-            {decorated && <Particles visual={visual} alive={alive} />}
+            {decorated && <Particles shape={shape} palette={palette} alive={alive} />}
 
             {isFocusActive && alive && (
               <text x="100" y="30" textAnchor="middle" fontSize="22" className="pet-float">
@@ -194,13 +200,13 @@ export function PetCanvas({
         <div className="relative z-10 text-center">
           <p
             className="ts-2 text-3xl font-black tracking-tight uppercase"
-            style={{ fontFamily: 'var(--font-display)', color: visual.palette[0] }}
+            style={{ fontFamily: 'var(--font-display)', color: palette[0] }}
           >
             {pet.name}
           </p>
           <p
             className="mt-1 text-xs font-black tracking-widest uppercase"
-            style={{ color: visual.palette[1] }}
+            style={{ color: palette[1] }}
           >
             {form.name} · LV.{pet.level}
             {pet.generation > 1 && ` · รุ่น ${pet.generation}`}
@@ -224,13 +230,15 @@ export function PetCanvas({
  * movement is part of what distinguishes it.
  */
 export function PetPortrait({
-  visual,
+  shape,
+  palette,
   tier,
   size = 96,
   dim = false,
   still = false,
 }: {
-  visual: PetVisual
+  shape: PetShape
+  palette: PetPalette
   tier: number
   size?: number
   dim?: boolean
@@ -250,21 +258,21 @@ export function PetPortrait({
         filter: dim ? 'grayscale(1)' : undefined,
       }}
     >
-      {!dim && <Aura visual={visual} alive focus={false} />}
+      {!dim && <Aura shape={shape} palette={palette} alive focus={false} />}
       <g
         transform={`translate(100 105) scale(${scale}) translate(-100 -105)`}
-        className={still ? undefined : idleClass(visual)}
+        className={still ? undefined : idleClass(shape)}
         style={{ transformOrigin: '100px 130px' }}
       >
-        <Crown visual={visual} />
-        <Body visual={visual} />
+        <Crown shape={shape} palette={palette} />
+        <Body shape={shape} palette={palette} />
         <circle cx="86" cy="78" r="7" fill="#0D0D1A" />
         <circle cx="114" cy="78" r="7" fill="#0D0D1A" />
         <circle cx="88.5" cy="75.5" r="2.4" fill="#FFFFFF" />
         <circle cx="116.5" cy="75.5" r="2.4" fill="#FFFFFF" />
         <path d="M91 95 q9 8 18 0" stroke="#0D0D1A" strokeWidth="4" fill="none" strokeLinecap="round" />
       </g>
-      {decorated && <Particles visual={visual} alive />}
+      {decorated && <Particles shape={shape} palette={palette} alive />}
     </svg>
   )
 }
