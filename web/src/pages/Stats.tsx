@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, StatTile } from '../components/ui'
+import { BackgroundWord, FloatingShapes } from '../components/Decor'
+import { Button, Card, EmptyState, SectionTitle, StatTile, TextInput } from '../components/ui'
+import { HAPTIC, accentAt, clashAt } from '../lib/design'
 import {
   downloadCsv,
   fetchScreenTimeDays,
@@ -17,15 +19,15 @@ const SOURCE_LABELS: Record<ScreenFreeSession['source'], string> = {
   web_timer_verified: 'จับเวลาบนเว็บ',
   web_timer_interrupted: 'ถูกขัดจังหวะ',
   self_reported: 'กรอกเอง',
-  android_usage_stats: 'วัดจากแอป Android',
+  android_usage_stats: 'วัดจากแอป',
 }
 
 export function Stats() {
   const profile = useAppStore((s) => s.profile)
+  const pushToast = useAppStore((s) => s.pushToast)
   const [sessions, setSessions] = useState<ScreenFreeSession[]>([])
   const [days, setDays] = useState<ScreenTimeDay[]>([])
   const [minutesInput, setMinutesInput] = useState('')
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -56,123 +58,174 @@ export function Stats() {
       recordedAt: Date.now(),
     }
     await logScreenTimeDay(profile.uid, entry)
-    setDays((prev) => [...prev.filter((d) => d.date !== entry.date), entry].sort((a, b) => a.date.localeCompare(b.date)))
+    setDays((prev) =>
+      [...prev.filter((d) => d.date !== entry.date), entry].sort((a, b) =>
+        a.date.localeCompare(b.date),
+      ),
+    )
     setMinutesInput('')
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 2500)
+    pushToast('บันทึกเวลาหน้าจอแล้ว', 'success')
   }
 
   const participantId = profile?.participantId || 'UNASSIGNED'
+  const maxMinutes = Math.max(600, ...days.map((d) => d.minutes))
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile label="เซสชันทั้งหมด" value={`${totals.count}`} />
-        <StatTile label="นาทีปลอดหน้าจอ" value={`${totals.minutes}`} hint="นับเฉพาะที่ไม่ถูกขัด" />
-        <StatTile label="ถูกขัดจังหวะ" value={`${totals.interrupted}`} hint="ไม่นับรวม" />
+    <div className="space-y-7">
+      <div
+        className="relative overflow-hidden rounded-3xl border-4 p-5"
+        style={{ borderColor: '#FF6B35', background: '#7B2FFF33', boxShadow: '8px 8px 0 #00F5D4' }}
+      >
+        <BackgroundWord word="DATA" className="top-2 -right-8" accent={1} />
+        <FloatingShapes count={5} seed={31} />
+        <div className="relative z-10 grid grid-cols-3 gap-3">
+          <StatTile label="เซสชัน" value={totals.count} accent={0} animate />
+          <StatTile label="นาทีจริง" value={totals.minutes} accent={1} hint="ไม่นับที่ถูกขัด" animate />
+          <StatTile label="ถูกขัด" value={totals.interrupted} accent={3} animate />
+        </div>
       </div>
 
-      <Card>
-        <h2 className="text-base font-semibold">บันทึกเวลาหน้าจอวันนี้</h2>
-        <p className="mt-1 text-xs text-[#a1a1aa]">
-          เปิดดูตัวเลขจาก Digital Wellbeing (Android) หรือ Screen Time (iOS) บนมือถือ
-          แล้วกรอกจำนวนนาทีรวมของวันนี้ ข้อมูลนี้จะถูกบันทึกเป็น "กรอกเอง" ในชุดข้อมูลวิจัย
-        </p>
-        <div className="mt-3 flex gap-2">
-          <input
-            type="number"
-            min="0"
-            inputMode="numeric"
-            value={minutesInput}
-            onChange={(e) => setMinutesInput(e.target.value)}
-            placeholder="เช่น 320"
-            className="flex-1 rounded-xl border border-[#3f3f46] bg-[#09090b] px-3 py-2.5 text-sm outline-none focus:border-[#0ea5e9]"
-          />
-          <Button onClick={() => void saveScreenTime()} disabled={!minutesInput}>
-            บันทึก
-          </Button>
-        </div>
-        {saved && <p className="mt-2 text-xs text-[#10b981]">บันทึกแล้ว ✓</p>}
-      </Card>
+      <section className="space-y-3">
+        <SectionTitle accent={2}>บันทึกเวลาหน้าจอวันนี้</SectionTitle>
+        <Card accent={2}>
+          <p className="text-sm leading-snug text-white/75">
+            เปิด Digital Wellbeing (Android) หรือ Screen Time (iOS) บนมือถือ
+            แล้วกรอกจำนวนนาทีรวมของวันนี้
+          </p>
+          <div className="mt-4 flex gap-2">
+            <div className="flex-1">
+              <TextInput
+                type="number"
+                accent={2}
+                value={minutesInput}
+                onChange={setMinutesInput}
+                placeholder="เช่น 320"
+                onEnter={() => void saveScreenTime()}
+              />
+            </div>
+            <Button
+              accent={2}
+              disabled={!minutesInput}
+              vibrate={HAPTIC.success}
+              onClick={() => void saveScreenTime()}
+            >
+              บันทึก
+            </Button>
+          </div>
+          <p className="mt-2 text-[11px] font-bold" style={{ color: accentAt(3) }}>
+            ข้อมูลนี้จะถูกบันทึกเป็น "กรอกเอง" ในชุดข้อมูลวิจัย
+          </p>
+        </Card>
+      </section>
 
-      <Card>
-        <h2 className="mb-3 text-base font-semibold">เวลาหน้าจอรายวัน</h2>
-        {days.length === 0 ? (
-          <p className="text-sm text-[#71717a]">ยังไม่มีข้อมูล</p>
-        ) : (
-          <div className="space-y-2">
-            {days.slice(-14).map((day) => (
-              <div key={day.date} className="flex items-center gap-3 text-sm">
-                <span className="w-24 shrink-0 text-[#a1a1aa]">{day.date}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#27272a]">
+      <section className="space-y-3">
+        <SectionTitle accent={4}>เวลาหน้าจอรายวัน</SectionTitle>
+        <Card accent={4}>
+          {days.length === 0 ? (
+            <EmptyState
+              emoji="📊"
+              title="ยังไม่มีข้อมูล"
+              detail="กรอกเวลาหน้าจอวันนี้เพื่อเริ่มเก็บสถิติ"
+              accent={4}
+            />
+          ) : (
+            <div className="space-y-2.5">
+              {days.slice(-14).map((day, i) => (
+                <div key={day.date} className="flex items-center gap-3">
+                  <span className="w-20 shrink-0 text-[11px] font-bold text-white/60">
+                    {day.date.slice(5)}
+                  </span>
                   <div
-                    className="h-full rounded-full bg-[#f43f5e]"
-                    style={{ width: `${Math.min(100, (day.minutes / 600) * 100)}%` }}
-                  />
+                    className="h-4 flex-1 overflow-hidden rounded-full border-2"
+                    style={{ borderColor: clashAt(i), background: '#0D0D1A' }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-[width] duration-700"
+                      style={{
+                        width: `${Math.min(100, (day.minutes / maxMinutes) * 100)}%`,
+                        backgroundImage: `linear-gradient(90deg, ${accentAt(i)}, ${accentAt(i + 1)})`,
+                      }}
+                    />
+                  </div>
+                  <span
+                    className="w-16 shrink-0 text-right text-xs font-black tabular-nums"
+                    style={{ color: accentAt(i) }}
+                  >
+                    {Math.floor(day.minutes / 60)}ช {day.minutes % 60}น
+                  </span>
                 </div>
-                <span className="w-20 shrink-0 text-right tabular-nums">
-                  {Math.floor(day.minutes / 60)}ชม {day.minutes % 60}น
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              ))}
+            </div>
+          )}
+        </Card>
+      </section>
 
-      <Card>
-        <h2 className="mb-3 text-base font-semibold">ประวัติเซสชันล่าสุด</h2>
-        {sessions.length === 0 ? (
-          <p className="text-sm text-[#71717a]">ยังไม่มีเซสชัน</p>
-        ) : (
-          <div className="space-y-2">
-            {sessions.slice(0, 10).map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between rounded-xl bg-[#09090b] px-3 py-2.5 text-sm"
-              >
-                <div>
-                  <p className="font-medium">
-                    {s.actualMinutes} นาที · {s.tag}
-                  </p>
-                  <p className="text-xs text-[#71717a]">
-                    {new Date(s.endTime).toLocaleString('th-TH')} · {SOURCE_LABELS[s.source]}
-                  </p>
+      <section className="space-y-3">
+        <SectionTitle accent={0}>เซสชันล่าสุด</SectionTitle>
+        <Card accent={0}>
+          {sessions.length === 0 ? (
+            <EmptyState
+              emoji="🌙"
+              title="ยังไม่มีเซสชัน"
+              detail="เริ่มเซสชันปลอดหน้าจอครั้งแรกของคุณ"
+              accent={0}
+            />
+          ) : (
+            <div className="space-y-2.5">
+              {sessions.slice(0, 10).map((s, i) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between rounded-2xl border-2 px-3 py-2.5"
+                  style={{ borderColor: accentAt(i), background: `${accentAt(i)}14` }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-black" style={{ color: accentAt(i) }}>
+                      {s.actualMinutes} นาที · {s.tag}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-white/50">
+                      {new Date(s.endTime).toLocaleString('th-TH')} · {SOURCE_LABELS[s.source]}
+                    </p>
+                  </div>
+                  <span aria-hidden className="shrink-0 text-xl">
+                    {s.completed ? '✅' : '➖'}
+                  </span>
                 </div>
-                <span className={s.completed ? 'text-[#10b981]' : 'text-[#71717a]'}>
-                  {s.completed ? '✓' : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              ))}
+            </div>
+          )}
+        </Card>
+      </section>
 
-      <Card>
-        <h2 className="text-base font-semibold">ส่งออกข้อมูลสำหรับวิเคราะห์</h2>
-        <p className="mt-1 text-xs text-[#a1a1aa]">
-          ดาวน์โหลดเป็น CSV เพื่อนำไปทำ paired t-test และ Pearson correlation ใน SPSS หรือ Python
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            variant="ghost"
-            onClick={() =>
-              downloadCsv(`sessions_${participantId}.csv`, sessionsToCsv(participantId, sessions))
-            }
-            disabled={sessions.length === 0}
-          >
-            ⬇ เซสชัน (CSV)
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() =>
-              downloadCsv(`screentime_${participantId}.csv`, screenTimeToCsv(participantId, days))
-            }
-            disabled={days.length === 0}
-          >
-            ⬇ เวลาหน้าจอ (CSV)
-          </Button>
-        </div>
-      </Card>
+      <section className="space-y-3">
+        <SectionTitle accent={3}>ส่งออกข้อมูล</SectionTitle>
+        <Card accent={3}>
+          <p className="text-sm leading-snug text-white/75">
+            ดาวน์โหลด CSV เพื่อนำไปทำ paired t-test และ Pearson correlation ใน SPSS หรือ Python
+          </p>
+          <div className="mt-4 flex flex-col gap-2.5">
+            <Button
+              accent={3}
+              variant="outline"
+              disabled={sessions.length === 0}
+              onClick={() =>
+                downloadCsv(`sessions_${participantId}.csv`, sessionsToCsv(participantId, sessions))
+              }
+            >
+              ⬇ เซสชัน (CSV)
+            </Button>
+            <Button
+              accent={4}
+              variant="outline"
+              disabled={days.length === 0}
+              onClick={() =>
+                downloadCsv(`screentime_${participantId}.csv`, screenTimeToCsv(participantId, days))
+              }
+            >
+              ⬇ เวลาหน้าจอ (CSV)
+            </Button>
+          </div>
+        </Card>
+      </section>
     </div>
   )
 }

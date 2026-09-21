@@ -1,22 +1,34 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
+/* Outfit + DM Sans carry the design system's Latin personality; Kanit is paired
+   into every stack because the app is written in Thai and none of the three
+   fonts the system names contain Thai glyphs. Without Kanit, every Thai string
+   would silently fall back to a system font and lose the whole aesthetic. */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=DM+Sans:wght@400;500;700&family=Kanit:wght@400;600;800;900&family=Bangers&display=swap');
 @import 'tailwindcss';
 
-/* Palette carried over from the Android app's theme (ui/theme/Color.kt) so the
-   web app and the phone app look like the same product. */
 @theme {
-  --color-surface: #09090b;
-  --color-card: #18181b;
-  --color-border-subtle: #27272a;
-  --color-muted: #a1a1aa;
-  --color-foreground: #fafafa;
+  /* --- Base ------------------------------------------------------------ */
+  --color-void: #0d0d1a;
+  --color-ink: #ffffff;
+  --color-muted: #2d1b4e;
 
-  --color-hunger: #10b981;
-  --color-energy: #f59e0b;
-  --color-happiness: #f43f5e;
-  --color-health: #22d3ee;
-  --color-exp: #8b5cf6;
-  --color-focus: #0ea5e9;
+  /* --- The five accents. Everything rotates through these. ------------- */
+  --color-accent: #ff3af2;
+  --color-secondary: #00f5d4;
+  --color-tertiary: #ffe600;
+  --color-quaternary: #ff6b35;
+  --color-quinary: #7b2fff;
+
+  --font-display: 'Outfit', 'Kanit', ui-sans-serif, sans-serif;
+  --font-body: 'DM Sans', 'Kanit', ui-sans-serif, sans-serif;
+  --font-comic: 'Bangers', 'Kanit', cursive;
+
+  --radius-card: 24px;
+  --radius-container: 16px;
 }
+
+/* ===========================================================================
+   Base
+   =========================================================================== */
 
 html,
 body,
@@ -26,18 +38,387 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-surface);
-  color: var(--color-foreground);
-  /* IBM Plex Sans Thai renders Thai tone marks and vowels at the right height;
-     the system stack previously used broke them up on some Windows machines. */
-  font-family: 'IBM Plex Sans Thai', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 17px;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
 }
 
-/* ---------------------------------------------------------------------------
-   Pet idle motion
-   --------------------------------------------------------------------------- */
+/* Two fixed patterns sit under the entire app, per the layering rule: a global
+   base of dots + stripes that every section then adds its own patterns on top of. */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::before {
+  background-image: radial-gradient(circle, rgba(255, 58, 242, 0.5) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.22;
+}
+
+body::after {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 12px,
+    rgba(255, 230, 0, 0.07) 12px,
+    rgba(255, 230, 0, 0.07) 24px
+  );
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-void);
+}
+
+/* ===========================================================================
+   Patterns — layered on sections and cards
+   =========================================================================== */
+
+.pattern-dots {
+  background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+  opacity: 0.18;
+}
+
+.pattern-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    currentColor 8px,
+    currentColor 16px
+  );
+  opacity: 0.1;
+}
+
+.pattern-checker {
+  background-image: conic-gradient(from 90deg at 1px 1px, transparent 90deg, currentColor 0);
+  background-size: 36px 36px;
+  opacity: 0.07;
+}
+
+.pattern-mesh {
+  background:
+    radial-gradient(ellipse at 18% 24%, rgba(255, 58, 242, 0.22) 0%, transparent 52%),
+    radial-gradient(ellipse at 82% 68%, rgba(0, 245, 212, 0.2) 0%, transparent 52%),
+    radial-gradient(ellipse at 52% 92%, rgba(123, 47, 255, 0.22) 0%, transparent 60%);
+}
+
+/* ===========================================================================
+   Shadows — never a single layer
+   =========================================================================== */
+
+.shadow-multi {
+  box-shadow:
+    6px 6px 0 var(--sh1, #ffe600),
+    12px 12px 0 var(--sh2, #ff3af2);
+}
+
+.shadow-multi-lg {
+  box-shadow:
+    8px 8px 0 var(--sh1, #00f5d4),
+    16px 16px 0 var(--sh2, #ff3af2),
+    24px 24px 0 var(--sh3, #ffe600);
+}
+
+.glow {
+  box-shadow:
+    0 0 20px color-mix(in srgb, var(--gl1, #ff3af2) 55%, transparent),
+    0 0 44px color-mix(in srgb, var(--gl2, #00f5d4) 35%, transparent);
+}
+
+.glow-lg {
+  box-shadow:
+    0 0 40px color-mix(in srgb, var(--gl1, #ff3af2) 60%, transparent),
+    0 0 80px color-mix(in srgb, var(--gl2, #ffe600) 40%, transparent),
+    0 0 120px color-mix(in srgb, var(--gl3, #7b2fff) 30%, transparent);
+}
+
+/* ===========================================================================
+   Text shadows — depth stacks
+   =========================================================================== */
+
+.ts-1 {
+  text-shadow: 2px 2px 0 #7b2fff;
+}
+.ts-2 {
+  text-shadow:
+    2px 2px 0 #7b2fff,
+    4px 4px 0 #ff3af2;
+}
+.ts-3 {
+  text-shadow:
+    2px 2px 0 #7b2fff,
+    4px 4px 0 #ff3af2,
+    6px 6px 0 #00f5d4;
+}
+.ts-mega {
+  text-shadow:
+    4px 4px 0 #7b2fff,
+    8px 8px 0 #ff3af2,
+    12px 12px 0 #00f5d4;
+}
+
+.text-rainbow {
+  background: linear-gradient(90deg, #ff3af2, #00f5d4, #ffe600, #ff6b35, #ff3af2);
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-shift 4s ease infinite;
+}
+
+/* ===========================================================================
+   Keyframes
+   =========================================================================== */
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+}
+
+@keyframes float-reverse {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(20px) rotate(-5deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(255, 58, 242, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(255, 58, 242, 0.85),
+      0 0 60px rgba(0, 245, 212, 0.5);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes bounce-subtle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* --- Dopamine feedback ----------------------------------------------- */
+
+/* The satisfying overshoot when a reward lands. */
+@keyframes pop {
+  0% {
+    transform: scale(0.4) rotate(-12deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.22) rotate(6deg);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(0.94) rotate(-2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes juice {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.32);
+  }
+  70% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer-sweep {
+  from {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  to {
+    transform: translateX(320%) skewX(-20deg);
+  }
+}
+
+@keyframes flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.8);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-64px) scale(0.9);
+  }
+}
+
+@keyframes slam-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.6) rotate(8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.94) rotate(-2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes toast-slam {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.85) rotate(-3deg);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(4px) scale(1.04) rotate(1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(-1deg);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ===========================================================================
+   Animation utilities
+   =========================================================================== */
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-float-reverse {
+  animation: float-reverse 5s ease-in-out infinite;
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+.animate-wiggle {
+  animation: wiggle 1s ease-in-out infinite;
+}
+.animate-bounce-subtle {
+  animation: bounce-subtle 2s ease-in-out infinite;
+}
+.animate-pop {
+  animation: pop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
+}
+.animate-juice {
+  animation: juice 0.45s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.animate-slam {
+  animation: slam-in 0.45s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
+}
+.animate-toast {
+  animation: toast-slam 0.45s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
+}
+.animate-rise {
+  animation: rise-fade 1.1s ease-out forwards;
+}
+.animate-flash {
+  animation: flash 0.7s ease-out forwards;
+}
+.animate-marquee {
+  animation: marquee 18s linear infinite;
+}
+
+/* --- Pet idle motion -------------------------------------------------- */
 
 @keyframes breathe {
   0%,
@@ -45,11 +426,11 @@ body {
     transform: scale(1) translateY(0);
   }
   50% {
-    transform: scale(1.025) translateY(-2px);
+    transform: scale(1.03) translateY(-3px);
   }
 }
 
-@keyframes weakBreathe {
+@keyframes weak-breathe {
   0%,
   100% {
     transform: scale(1) translateY(0);
@@ -59,59 +440,18 @@ body {
   }
 }
 
-@keyframes reactBounce {
+@keyframes react-bounce {
   0% {
     transform: scale(1) translateY(0);
   }
   30% {
-    transform: scale(1.09) translateY(-10px);
+    transform: scale(1.12) translateY(-14px) rotate(-4deg);
   }
   55% {
-    transform: scale(0.97) translateY(2px);
+    transform: scale(0.95) translateY(3px) rotate(2deg);
   }
   100% {
-    transform: scale(1) translateY(0);
-  }
-}
-
-@keyframes auraPulse {
-  0%,
-  100% {
-    opacity: 0.18;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.32;
-    transform: scale(1.06);
-  }
-}
-
-@keyframes floatUp {
-  0% {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes popIn {
-  0% {
-    opacity: 0;
-    transform: scale(0.4) translateY(6px);
-  }
-  40% {
-    opacity: 1;
-    transform: scale(1.15) translateY(-4px);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1) translateY(-16px);
+    transform: scale(1) translateY(0) rotate(0deg);
   }
 }
 
@@ -119,96 +459,59 @@ body {
   animation: breathe 3.6s ease-in-out infinite;
 }
 .pet-weak {
-  animation: weakBreathe 5.5s ease-in-out infinite;
+  animation: weak-breathe 5.5s ease-in-out infinite;
 }
 .pet-react {
-  animation: reactBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: react-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .pet-dead {
   opacity: 0.55;
-  filter: grayscale(0.7);
-}
-.pet-aura {
-  animation: auraPulse 4s ease-in-out infinite;
-  transform-origin: 100px 105px;
+  filter: grayscale(0.8);
 }
 .pet-float {
-  animation: floatUp 2.4s ease-in-out infinite;
-}
-.pet-pop {
-  animation: popIn 0.6s ease-out forwards;
+  animation: bounce-subtle 2.4s ease-in-out infinite;
 }
 
-/* ---------------------------------------------------------------------------
-   UI motion
-   --------------------------------------------------------------------------- */
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* A light sweeps across filled stat bars — small, constant, satisfying. */
+.shimmer-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: shimmer-sweep 2.4s ease-in-out infinite;
 }
 
-@keyframes modalIn {
-  from {
-    opacity: 0;
-    transform: scale(0.94) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+.will-move {
+  will-change: transform;
 }
 
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateY(-14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* ===========================================================================
+   Focus — double ring, 8px minimum, never colour alone
+   =========================================================================== */
+
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: 3px dashed var(--color-tertiary);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 4px var(--color-void),
+    0 0 0 8px var(--color-accent);
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
+/* ===========================================================================
+   Reduced motion — keep every colour, border and shadow, drop the movement
+   =========================================================================== */
 
-.anim-fade-up {
-  animation: fadeUp 0.35s ease-out both;
-}
-.anim-modal {
-  animation: modalIn 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) both;
-}
-.anim-toast {
-  animation: toastIn 0.25s ease-out both;
-}
-
-.skeleton {
-  background: linear-gradient(90deg, #27272a 25%, #3f3f46 50%, #27272a 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-/* Respect users who have asked the OS to reduce motion. The pet still changes
-   expression and state — it simply stops moving. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.001ms !important;
+    animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+    transition-duration: 0.15s !important;
+  }
+
+  .shimmer-bar::after {
+    display: none;
   }
 }
