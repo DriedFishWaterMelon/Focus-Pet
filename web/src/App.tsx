@@ -8,6 +8,7 @@ import {
   Onboarding,
   ToastLayer,
 } from './components/Overlays'
+import { EvolutionChoiceModal } from './components/EvolutionTree'
 import { Focus } from './pages/Focus'
 import { Home } from './pages/Home'
 import { Inventory } from './pages/Inventory'
@@ -15,6 +16,7 @@ import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
 import { Shop } from './pages/Shop'
 import { Stats } from './pages/Stats'
+import { Tree } from './pages/Tree'
 import { HAPTIC, accentAt, haptic, readableOn } from './lib/design'
 import { moodOf } from './lib/gameLogic'
 import { useAppStore } from './store/useAppStore'
@@ -127,7 +129,8 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/focus" element={<Focus />} />
             <Route path="/shop" element={<Shop />} />
-            <Route path="/stats" element={<Stats />} />
+            <Route path="/tree" element={<Tree />} />
+          <Route path="/stats" element={<Stats />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -189,6 +192,7 @@ export default function App() {
         </nav>
 
         <AwayReportModal />
+        <EvolutionChoiceModal />
         <CelebrationModal />
         <ToastLayer />
       </div>

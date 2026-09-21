@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BackgroundWord, FloatingShapes, Marquee } from '../components/Decor'
+import { EvolutionBanner } from '../components/EvolutionTree'
 import { PetCanvas } from '../components/PetCanvas'
 import { AnimatedNumber, Button, Card, SectionTitle, StatBar, StatTile } from '../components/ui'
 import { FloatingGain } from '../components/Burst'
@@ -13,6 +14,7 @@ import {
   streakAtRisk,
   toIsoDate,
 } from '../lib/gameLogic'
+import { currentNode, levelsUntilNextChoice } from '../lib/evolution'
 import { useAppStore } from '../store/useAppStore'
 
 export function Home() {
@@ -21,6 +23,7 @@ export function Home() {
   const pat = useAppStore((s) => s.pat)
   const feed = useAppStore((s) => s.feed)
   const isFocusActive = useAppStore((s) => s.isFocusActive)
+  const openEvolutionPrompt = useAppStore((s) => s.openEvolutionPrompt)
 
   const mood = moodOf(pet)
   const atRisk = streakAtRisk(pet, toIsoDate(Date.now()))
@@ -46,8 +49,13 @@ export function Home() {
     window.setTimeout(() => setGains((current) => current.filter((g) => g.id !== id)), 1200)
   }, [pet.exp])
 
+  const node = currentNode(pet)
+  const toNextBranch = levelsUntilNextChoice(pet)
+
   return (
     <div className="space-y-6">
+      <EvolutionBanner pet={pet} onOpen={openEvolutionPrompt} />
+
       {needsMedicine && (
         <div
           className="animate-slam relative overflow-hidden rounded-3xl border-4 border-dashed p-5"
@@ -106,6 +114,15 @@ export function Home() {
           >
             ▸ แตะเพื่อเล่นด้วย ◂
           </p>
+          <Link to="/tree" className="relative z-10 mt-3 block">
+            <div
+              className="mx-auto w-fit rounded-full border-2 px-4 py-1.5 text-[11px] font-black tracking-widest uppercase transition-transform active:scale-95"
+              style={{ borderColor: node.visual.palette[1], color: node.visual.palette[1] }}
+            >
+              🌳 {node.name}
+              {toNextBranch !== null && toNextBranch > 0 && ` · อีก ${toNextBranch} เลเวล`}
+            </div>
+          </Link>
         </div>
       </div>
 

@@ -55,9 +55,33 @@ export const SPECIES_INFO: Record<
   stone: { name: 'ก้อนหินมีชีวิต', color: '#8b5cf6', description: 'อดทน ไม่ยอมแพ้ง่าย' },
 }
 
+/**
+ * Visual traits a form is drawn from.
+ *
+ * Fifteen hand-drawn pets would be fifteen things to keep in sync, so each form
+ * instead declares which body, crown, particle, idle motion and aura it uses and
+ * PetCanvas composes them. Adding a form is a data change, not a drawing.
+ */
+export interface PetVisual {
+  /** Body colour and accent. */
+  palette: [string, string]
+  body: 'blob' | 'round' | 'tall' | 'wisp' | 'crystal'
+  crown: 'none' | 'sprout' | 'leaf' | 'petal' | 'branch' | 'spike' | 'halo' | 'bloom'
+  particle: 'none' | 'sparkle' | 'petal' | 'leaf' | 'dew' | 'star' | 'mist'
+  idle: 'breathe' | 'sway' | 'float' | 'pulse' | 'shimmer'
+  aura: 'none' | 'soft' | 'strong' | 'ring' | 'rays'
+}
+
 export interface Pet {
   name: string
   species: PetSpecies
+  /**
+   * The forms this pet has grown through, root first. The last entry is the
+   * current form. Storing the whole path rather than just the current node is
+   * what lets the tree view show the road taken and grey out what was closed
+   * off by earlier choices.
+   */
+  evolutionPath: string[]
   /** 0 to 100 */
   hunger: number
   /** 0 to 100 */

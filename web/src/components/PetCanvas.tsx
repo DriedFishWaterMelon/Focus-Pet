@@ -1,38 +1,49 @@
 import { useEffect, useRef, useState } from 'react'
-import { SpinRing } from './Decor'
+import { Aura, Body, Crown, Particles, idleClass } from './PetArt'
 import { HAPTIC, accentAt, haptic } from '../lib/design'
+import { currentNode } from '../lib/evolution'
 import { moodOf } from '../lib/gameLogic'
-import { PET_MOOD_INFO, PET_STAGE_LABELS_TH, SPECIES_INFO } from '../lib/types'
-import type { Pet } from '../lib/types'
+import { PET_MOOD_INFO } from '../lib/types'
+import type { Pet, PetVisual } from '../lib/types'
 
-// The pet, extended for the maximalist system: a saturated body, a pulsing
-// aura, a rotating dashed ring and hearts that fly off when it is patted.
+// The pet.
 //
-// The idle motion is what makes it read as a creature rather than an
-// illustration — it breathes continuously and blinks at irregular intervals.
+// Body, crown, aura and particles all come from the current evolution form, but
+// the face and the mood rules are shared by every form on purpose: a sick pet
+// must read as sick whether it is a seedling or a Star Prism, and duplicating
+// the expression logic fifteen times is how that stops being true.
 
-const STAGE_SCALE: Record<Pet['stage'], number> = {
-  BABY: 0.75,
-  JUVENILE: 0.85,
-  ADULT: 1,
-  MYSTIC: 1.1,
-  LEGEND: 1.2,
-}
+const TIER_SCALE = [0.74, 0.86, 1, 1.12]
 
 interface Props {
   pet: Pet
   isFocusActive?: boolean
   onPat?: () => void
   compact?: boolean
-  /** Calm mode strips the decoration during an active session. */
+  /** Calm mode strips decoration during an active session. */
   calm?: boolean
+  /** Render a specific form instead of the pet's own, for the tree preview. */
+  previewVisual?: PetVisual
+  previewTier?: number
 }
 
-export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, calm = false }: Props) {
+export function PetCanvas({
+  pet,
+  isFocusActive = false,
+  onPat,
+  compact = false,
+  calm = false,
+  previewVisual,
+  previewTier,
+}: Props) {
+  const node = currentNode(pet)
+  const visual = previewVisual ?? node.visual
+  const tier = previewTier ?? node.tier
   const mood = isFocusActive && pet.isAlive ? 'MEDITATING' : moodOf(pet)
-  const scale = STAGE_SCALE[pet.stage]
-  const species = SPECIES_INFO[pet.species] ?? SPECIES_INFO.leaf
-  const body = pet.isAlive ? species.color : '#3F3F46'
+
+  const alive = pet.isAlive
+  const scale = TIER_SCALE[Math.min(tier, TIER_SCALE.length - 1)]
+  const dead = !alive
 
   const [blinking, setBlinking] = useState(false)
   const [reacting, setReacting] = useState(false)
@@ -43,9 +54,8 @@ export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, 
   // Irregular blinking. A fixed interval looks mechanical, so the gap is
   // randomised between roughly two and seven seconds.
   useEffect(() => {
-    if (!pet.isAlive) return
+    if (!alive) return
     let timeout: number
-
     const scheduleBlink = () => {
       timeout = window.setTimeout(
         () => {
@@ -56,15 +66,14 @@ export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, 
         2000 + Math.random() * 5000,
       )
     }
-
     scheduleBlink()
     return () => window.clearTimeout(timeout)
-  }, [pet.isAlive])
+  }, [alive])
 
   useEffect(() => () => window.clearTimeout(reactTimer.current), [])
 
   function handlePat() {
-    if (!onPat || !pet.isAlive) return
+    if (!onPat || !alive) return
     haptic(HAPTIC.success)
     setReacting(true)
 
@@ -78,64 +87,44 @@ export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, 
   }
 
   const sleeping = mood === 'TIRED' || mood === 'MEDITATING'
-  const eyesClosed = sleeping || blinking || !pet.isAlive
+  const eyesClosed = sleeping || blinking || dead
+  const ailing = mood === 'SICK' || mood === 'DYING'
   const sizeClass = compact ? 'h-28 w-28' : 'h-52 w-52 sm:h-60 sm:w-60'
-  const decorated = !calm && pet.isAlive
+  const decorated = !calm && alive
+
+  const bodyClass = dead
+    ? 'pet-dead'
+    : reacting
+      ? 'pet-react'
+      : ailing
+        ? 'pet-weak'
+        : idleClass(visual)
 
   return (
     <div className="relative flex flex-col items-center gap-3">
       <div className="relative">
-        {decorated && <SpinRing size={compact ? 140 : 250} accent={pet.level % 5} />}
-
         <button
           type="button"
           onClick={handlePat}
-          aria-label={pet.isAlive ? `ลูบ ${pet.name}` : pet.name}
-          disabled={!onPat || !pet.isAlive}
+          aria-label={alive ? `ลูบ ${pet.name}` : pet.name}
+          disabled={!onPat || !alive}
           className="group relative rounded-full p-2 transition-transform duration-200 enabled:active:scale-90 disabled:cursor-default"
         >
           <svg viewBox="0 0 200 200" className={sizeClass} role="img">
-            <title>{`${pet.name}, ${PET_MOOD_INFO[mood].label}`}</title>
+            <title>{`${pet.name}, ${node.name}, ${PET_MOOD_INFO[mood].label}`}</title>
 
-            <defs>
-              <radialGradient id={`aura-${pet.species}`}>
-                <stop offset="0%" stopColor={body} stopOpacity="0.55" />
-                <stop offset="100%" stopColor={body} stopOpacity="0" />
-              </radialGradient>
-            </defs>
-
-            {pet.isAlive && (
-              <circle
-                cx="100"
-                cy="105"
-                r={78 * scale}
-                fill={`url(#aura-${pet.species})`}
-                className={isFocusActive ? 'animate-pulse-glow' : 'animate-bounce-subtle'}
-                style={{ transformOrigin: '100px 105px' }}
-              />
-            )}
+            {decorated && <Aura visual={visual} alive={alive} focus={isFocusActive} />}
 
             <g
               transform={`translate(100 105) scale(${scale}) translate(-100 -105)`}
-              className={
-                !pet.isAlive
-                  ? 'pet-dead'
-                  : reacting
-                    ? 'pet-react'
-                    : mood === 'SICK' || mood === 'DYING'
-                      ? 'pet-weak'
-                      : 'pet-breathe'
-              }
+              className={bodyClass}
               style={{ transformOrigin: '100px 130px' }}
             >
-              <ellipse cx="72" cy="58" rx="13" ry="22" fill={body} transform="rotate(-25 72 58)" />
-              <ellipse cx="128" cy="58" rx="13" ry="22" fill={body} transform="rotate(25 128 58)" />
+              <Crown visual={visual} />
+              <Body visual={visual} />
 
-              <ellipse cx="100" cy="120" rx="52" ry="46" fill={body} />
-              <ellipse cx="100" cy="128" rx="34" ry="30" fill="#FFFFFF" opacity="0.25" />
-              <circle cx="100" cy="82" r="42" fill={body} />
-
-              {!pet.isAlive ? (
+              {/* Face — identical across every form so mood always reads. */}
+              {dead ? (
                 <>
                   <path d="M79 74 l14 14 M93 74 l-14 14" stroke="#0D0D1A" strokeWidth="4" strokeLinecap="round" />
                   <path d="M107 74 l14 14 M121 74 l-14 14" stroke="#0D0D1A" strokeWidth="4" strokeLinecap="round" />
@@ -154,11 +143,11 @@ export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, 
                 </>
               )}
 
-              {!pet.isAlive ? (
+              {dead ? (
                 <path d="M91 99 q9 -7 18 0" stroke="#0D0D1A" strokeWidth="3.5" fill="none" strokeLinecap="round" />
               ) : mood === 'HUNGRY' ? (
                 <ellipse cx="100" cy="97" rx="7" ry="9" fill="#0D0D1A" opacity="0.85" />
-              ) : mood === 'SICK' || mood === 'DYING' ? (
+              ) : ailing ? (
                 <path d="M91 99 q9 -6 18 0" stroke="#0D0D1A" strokeWidth="3.5" fill="none" strokeLinecap="round" />
               ) : mood === 'ECSTATIC' ? (
                 <path d="M88 94 q12 14 24 0" stroke="#0D0D1A" strokeWidth="4" fill="none" strokeLinecap="round" />
@@ -166,28 +155,29 @@ export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, 
                 <path d="M91 95 q9 8 18 0" stroke="#0D0D1A" strokeWidth="4" fill="none" strokeLinecap="round" />
               )}
 
-              {pet.isAlive && (
+              {alive && (
                 <>
-                  <circle cx="72" cy="90" r="6.5" fill="#FF3AF2" opacity={mood === 'SICK' ? 0.2 : 0.55} />
-                  <circle cx="128" cy="90" r="6.5" fill="#FF3AF2" opacity={mood === 'SICK' ? 0.2 : 0.55} />
+                  <circle cx="72" cy="90" r="6.5" fill="#FF3AF2" opacity={ailing ? 0.2 : 0.5} />
+                  <circle cx="128" cy="90" r="6.5" fill="#FF3AF2" opacity={ailing ? 0.2 : 0.5} />
                 </>
               )}
             </g>
 
-            {isFocusActive && pet.isAlive && (
-              <text x="100" y="34" textAnchor="middle" fontSize="22" className="pet-float">
+            {decorated && <Particles visual={visual} alive={alive} />}
+
+            {isFocusActive && alive && (
+              <text x="100" y="30" textAnchor="middle" fontSize="22" className="pet-float">
                 💤
               </text>
             )}
-            {(mood === 'SICK' || mood === 'DYING') && (
-              <text x="146" y="50" textAnchor="middle" fontSize="24" className="pet-float">
+            {ailing && (
+              <text x="150" y="46" textAnchor="middle" fontSize="24" className="pet-float">
                 🤒
               </text>
             )}
           </svg>
         </button>
 
-        {/* Hearts fly off on every pat — immediate, repeatable, physical feedback. */}
         {hearts.map((id, i) => (
           <span
             key={id}
@@ -204,15 +194,15 @@ export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, 
         <div className="relative z-10 text-center">
           <p
             className="ts-2 text-3xl font-black tracking-tight uppercase"
-            style={{ fontFamily: 'var(--font-display)', color: body }}
+            style={{ fontFamily: 'var(--font-display)', color: visual.palette[0] }}
           >
             {pet.name}
           </p>
           <p
             className="mt-1 text-xs font-black tracking-widest uppercase"
-            style={{ color: accentAt(pet.level + 1) }}
+            style={{ color: visual.palette[1] }}
           >
-            {PET_STAGE_LABELS_TH[pet.stage]} · LV.{pet.level}
+            {node.name} · LV.{pet.level}
             {pet.generation > 1 && ` · รุ่น ${pet.generation}`}
           </p>
           <p className="mt-1.5 text-sm font-bold text-white/85">
@@ -223,3 +213,40 @@ export function PetCanvas({ pet, isFocusActive = false, onPat, compact = false, 
     </div>
   )
 }
+
+/** Small standalone portrait used by the tree and the choice modal. */
+export function PetPortrait({
+  visual,
+  tier,
+  size = 96,
+  dim = false,
+}: {
+  visual: PetVisual
+  tier: number
+  size?: number
+  dim?: boolean
+}) {
+  const scale = TIER_SCALE[Math.min(tier, TIER_SCALE.length - 1)]
+
+  return (
+    <svg
+      viewBox="0 0 200 200"
+      aria-hidden
+      style={{ width: size, height: size, opacity: dim ? 0.3 : 1, filter: dim ? 'grayscale(1)' : undefined }}
+    >
+      {!dim && <Aura visual={visual} alive focus={false} />}
+      <g transform={`translate(100 105) scale(${scale}) translate(-100 -105)`}>
+        <Crown visual={visual} />
+        <Body visual={visual} />
+        <circle cx="86" cy="78" r="7" fill="#0D0D1A" />
+        <circle cx="114" cy="78" r="7" fill="#0D0D1A" />
+        <circle cx="88.5" cy="75.5" r="2.4" fill="#FFFFFF" />
+        <circle cx="116.5" cy="75.5" r="2.4" fill="#FFFFFF" />
+        <path d="M91 95 q9 8 18 0" stroke="#0D0D1A" strokeWidth="4" fill="none" strokeLinecap="round" />
+      </g>
+      {!dim && <Particles visual={visual} alive />}
+    </svg>
+  )
+}
+
+export { accentAt }
