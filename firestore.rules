@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// Security rules for the Focus Pet study.
+//
+// The Firebase web config is public by design — anyone can read it out of the
+// JavaScript bundle. These rules, not the config, are what protect participant
+// data. The rule is simple: a signed-in participant may read and write only the
+// documents under their own users/{uid} tree, and nobody can read anyone else's.
+//
+// Note for the research team: this means no participant can see another
+// participant's screen time, and it also means the aggregate export has to be run
+// with admin credentials (Firebase Console or a service account), not from the
+// participant-facing web app.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // Pet state, inventory, sessions, daily screen time and survey responses.
+      match /{subcollection=**} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+/* Palette carried over from the Android app's theme (ui/theme/Color.kt) so the
+   web app and the phone app look like the same product. */
+@theme {
+  --color-surface: #09090b;
+  --color-card: #18181b;
+  --color-border-subtle: #27272a;
+  --color-muted: #a1a1aa;
+  --color-foreground: #fafafa;
+
+  --color-hunger: #10b981;
+  --color-energy: #f59e0b;
+  --color-happiness: #f43f5e;
+  --color-exp: #8b5cf6;
+  --color-focus: #0ea5e9;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font-family: ui-sans-serif, system-ui, 'Segoe UI', 'Noto Sans Thai', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

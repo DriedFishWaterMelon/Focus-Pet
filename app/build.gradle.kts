@@ -136,3 +136,10 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+// Robolectric requires Java 21 to emulate Android SDK 36, while the rest of the
+// build runs fine on JDK 17. Provision a 21 toolchain just for the test tasks so
+// unit tests work regardless of the JDK Gradle itself was launched with.
+tasks.withType<Test>().configureEach {
+  javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
