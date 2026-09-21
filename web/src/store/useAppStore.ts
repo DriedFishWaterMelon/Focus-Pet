@@ -18,11 +18,8 @@ import {
   grantItem,
   hatchNewPet,
   itemIdForRewardName,
-  migratePet,
   playWithPet,
 } from '../lib/gameLogic'
-import { chooseEvolution } from '../lib/evolution'
-import type { NodeId } from '../lib/evolution'
 import { logSession } from '../lib/research'
 import {
   claimParticipantId,
@@ -91,11 +88,6 @@ interface AppState {
 
   completeOnboarding: (name: string, species: PetSpecies) => Promise<void>
   revivePet: (name: string, species: PetSpecies) => Promise<void>
-  pickEvolution: (choice: NodeId) => Promise<void>
-  /** False while the player has postponed the branch choice. */
-  evolutionPromptOpen: boolean
-  openEvolutionPrompt: () => void
-  deferEvolutionPrompt: () => void
 
   setTargetMinutes: (minutes: number) => void
   setSelectedTag: (tag: string) => void
@@ -141,7 +133,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   celebrations: [],
   toasts: [],
-  evolutionPromptOpen: true,
 
   listenToAuth: () =>
     onAuthStateChanged(auth, async (user) => {
@@ -207,8 +198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       getDoc(doc(db, paths.achievements(uid))),
     ])
 
-    const raw = petSnap.exists() ? ({ ...defaultPet(), ...petSnap.data() } as Pet) : defaultPet()
-    const stored = migratePet(raw)
+    const stored = petSnap.exists() ? ({ ...defaultPet(), ...petSnap.data() } as Pet) : defaultPet()
     const inventory = invSnap.exists()
       ? ((invSnap.data().items as InventoryItem[]) ?? defaultInventory())
       : defaultInventory()
@@ -298,18 +288,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     get().pushToast(`ยินดีต้อนรับ ${pet.name}!`, 'success')
   },
-
-  pickEvolution: async (choice) => {
-    const evolved = chooseEvolution(get().pet, choice)
-    if (evolved === get().pet) return
-    await get().persistPet(evolved)
-    // Reopen for the next tier rather than leaving it suppressed by an earlier
-    // postponement.
-    set({ evolutionPromptOpen: true })
-  },
-
-  openEvolutionPrompt: () => set({ evolutionPromptOpen: true }),
-  deferEvolutionPrompt: () => set({ evolutionPromptOpen: false }),
 
   revivePet: async (name, species) => {
     const fresh = hatchNewPet(get().pet, name.trim() || 'Sproutly', species)

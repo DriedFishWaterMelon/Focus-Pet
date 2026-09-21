@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Aura, Body, Crown, Particles, idleClass } from './PetArt'
-import { EVOLUTION_TREE } from '../lib/evolution'
+import { GROWTH_FORMS } from '../lib/evolution'
 import type { PetVisual } from '../lib/types'
 
 // The artwork is composed from traits rather than drawn per form, so the thing
@@ -9,7 +9,7 @@ import type { PetVisual } from '../lib/types'
 // A crown that silently renders nothing or a body with a NaN coordinate looks
 // like a blank pet in the browser and like nothing at all in a type check.
 
-const FORMS = Object.values(EVOLUTION_TREE)
+const FORMS = GROWTH_FORMS
 
 function markupFor(visual: PetVisual): string {
   return renderToStaticMarkup(
@@ -23,7 +23,7 @@ function markupFor(visual: PetVisual): string {
 }
 
 describe('every evolution form renders', () => {
-  it.each(FORMS.map((f) => [f.id, f] as const))('%s produces drawable svg', (_id, form) => {
+  it.each(FORMS.map((f) => [f.stage, f] as const))('%s produces drawable svg', (_stage, form) => {
     const markup = markupFor(form.visual)
 
     // Something was actually drawn.
@@ -47,8 +47,8 @@ describe('every evolution form renders', () => {
     for (const form of FORMS) {
       const markup = markupFor(form.visual)
       const clash = seen.get(markup)
-      expect(clash, `${form.id} renders identically to ${clash}`).toBeUndefined()
-      seen.set(markup, form.id)
+      expect(clash, `${form.stage} renders identically to ${clash}`).toBeUndefined()
+      seen.set(markup, form.stage)
     }
     expect(seen.size).toBe(FORMS.length)
   })
@@ -59,10 +59,10 @@ describe('every evolution form renders', () => {
     }
   })
 
-  it('uses more than one idle animation across the tree', () => {
-    // If every form breathed the same way the tree would feel static.
+  it('uses more than one idle animation across the growth line', () => {
+    // If every form breathed the same way, growing up would feel like nothing.
     const idles = new Set(FORMS.map((f) => idleClass(f.visual)))
-    expect(idles.size).toBeGreaterThanOrEqual(4)
+    expect(idles.size).toBeGreaterThanOrEqual(3)
   })
 })
 

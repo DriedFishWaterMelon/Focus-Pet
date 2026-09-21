@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { Aura, Body, Crown, Particles, idleClass } from './PetArt'
 import { HAPTIC, accentAt, haptic } from '../lib/design'
-import { currentNode } from '../lib/evolution'
+import { GROWTH_FORMS, currentForm } from '../lib/evolution'
 import { moodOf } from '../lib/gameLogic'
 import { PET_MOOD_INFO } from '../lib/types'
 import type { Pet, PetVisual } from '../lib/types'
 
 // The pet.
 //
-// Body, crown, aura and particles all come from the current evolution form, but
-// the face and the mood rules are shared by every form on purpose: a sick pet
-// must read as sick whether it is a seedling or a Star Prism, and duplicating
-// the expression logic fifteen times is how that stops being true.
+// Body, crown, aura and particles come from the current growth form, but the
+// face and the mood rules are shared by every form on purpose: a sick pet must
+// read as sick whether it is a seedling or a Celestial Spirit, and duplicating
+// the expression logic per form is how that stops being true.
 
 const TIER_SCALE = [0.74, 0.86, 1, 1.12]
 
@@ -36,9 +36,9 @@ export function PetCanvas({
   previewVisual,
   previewTier,
 }: Props) {
-  const node = currentNode(pet)
-  const visual = previewVisual ?? node.visual
-  const tier = previewTier ?? node.tier
+  const form = currentForm(pet)
+  const visual = previewVisual ?? form.visual
+  const tier = previewTier ?? GROWTH_FORMS.indexOf(form)
   const mood = isFocusActive && pet.isAlive ? 'MEDITATING' : moodOf(pet)
 
   const alive = pet.isAlive
@@ -111,7 +111,7 @@ export function PetCanvas({
           className="group relative rounded-full p-2 transition-transform duration-200 enabled:active:scale-90 disabled:cursor-default"
         >
           <svg viewBox="0 0 200 200" className={sizeClass} role="img">
-            <title>{`${pet.name}, ${node.name}, ${PET_MOOD_INFO[mood].label}`}</title>
+            <title>{`${pet.name}, ${form.name}, ${PET_MOOD_INFO[mood].label}`}</title>
 
             {decorated && <Aura visual={visual} alive={alive} focus={isFocusActive} />}
 
@@ -202,7 +202,7 @@ export function PetCanvas({
             className="mt-1 text-xs font-black tracking-widest uppercase"
             style={{ color: visual.palette[1] }}
           >
-            {node.name} · LV.{pet.level}
+            {form.name} · LV.{pet.level}
             {pet.generation > 1 && ` · รุ่น ${pet.generation}`}
           </p>
           <p className="mt-1.5 text-sm font-bold text-white/85">

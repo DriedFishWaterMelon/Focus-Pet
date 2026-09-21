@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BackgroundWord, FloatingShapes, Marquee } from '../components/Decor'
-import { EvolutionBanner } from '../components/EvolutionTree'
+import { GrowthPreviewButton } from '../components/GrowthPreview'
 import { PetCanvas } from '../components/PetCanvas'
 import { AnimatedNumber, Button, Card, SectionTitle, StatBar, StatTile } from '../components/ui'
 import { FloatingGain } from '../components/Burst'
@@ -14,7 +14,6 @@ import {
   streakAtRisk,
   toIsoDate,
 } from '../lib/gameLogic'
-import { currentNode, levelsUntilNextChoice } from '../lib/evolution'
 import { useAppStore } from '../store/useAppStore'
 
 export function Home() {
@@ -23,7 +22,6 @@ export function Home() {
   const pat = useAppStore((s) => s.pat)
   const feed = useAppStore((s) => s.feed)
   const isFocusActive = useAppStore((s) => s.isFocusActive)
-  const openEvolutionPrompt = useAppStore((s) => s.openEvolutionPrompt)
 
   const mood = moodOf(pet)
   const atRisk = streakAtRisk(pet, toIsoDate(Date.now()))
@@ -49,13 +47,8 @@ export function Home() {
     window.setTimeout(() => setGains((current) => current.filter((g) => g.id !== id)), 1200)
   }, [pet.exp])
 
-  const node = currentNode(pet)
-  const toNextBranch = levelsUntilNextChoice(pet)
-
   return (
     <div className="space-y-6">
-      <EvolutionBanner pet={pet} onOpen={openEvolutionPrompt} />
-
       {needsMedicine && (
         <div
           className="animate-slam relative overflow-hidden rounded-3xl border-4 border-dashed p-5"
@@ -114,32 +107,9 @@ export function Home() {
           >
             ▸ แตะเพื่อเล่นด้วย ◂
           </p>
-          <Link to="/tree" className="relative z-10 mt-4 block px-4">
-            <div
-              className="flex items-center justify-between gap-2 rounded-2xl border-4 px-4 py-3 transition-transform active:scale-95"
-              style={{
-                borderColor: node.visual.palette[1],
-                background: `${node.visual.palette[0]}22`,
-                boxShadow: `4px 4px 0 ${node.visual.palette[0]}`,
-              }}
-            >
-              <span className="text-left">
-                <span
-                  className="block text-sm font-black uppercase"
-                  style={{ fontFamily: 'var(--font-display)', color: node.visual.palette[1] }}
-                >
-                  🌳 ต้นไม้วิวัฒนาการ
-                </span>
-                <span className="block text-[10px] font-bold text-white/60">
-                  {node.name}
-                  {toNextBranch !== null && toNextBranch > 0 && ` · อีก ${toNextBranch} เลเวล`}
-                </span>
-              </span>
-              <span aria-hidden className="text-xl" style={{ color: node.visual.palette[1] }}>
-                ›
-              </span>
-            </div>
-          </Link>
+          <div className="relative z-10 mt-3 flex justify-center">
+            <GrowthPreviewButton pet={pet} />
+          </div>
         </div>
       </div>
 

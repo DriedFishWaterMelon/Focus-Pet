@@ -6,7 +6,6 @@
 // Everything here is a pure function on purpose — these are the rules the research
 // results depend on, so they need to be unit-testable without a browser or Firebase.
 
-import { ROOT_NODE, migrateEvolutionPath } from './evolution'
 import type {
   AwayReport,
   InventoryItem,
@@ -127,7 +126,6 @@ export function defaultPet(overrides: Partial<Pet> = {}): Pet {
   return {
     name: 'Sproutly',
     species: 'leaf',
-    evolutionPath: [ROOT_NODE],
     hunger: 85,
     happiness: 90,
     energy: 85,
@@ -148,18 +146,6 @@ export function defaultPet(overrides: Partial<Pet> = {}): Pet {
     generation: 1,
     ...overrides,
   }
-}
-
-/**
- * Brings a stored pet up to the current shape.
- *
- * Saves written before the evolution tree have no path at all. Rebuilding it
- * from their level keeps their progress intact instead of resetting them to a
- * seedling, which would read as losing four weeks of work.
- */
-export function migratePet(pet: Pet): Pet {
-  if (pet.evolutionPath && pet.evolutionPath.length > 0) return pet
-  return { ...pet, evolutionPath: migrateEvolutionPath(pet.level) }
 }
 
 export interface DecayResult {
@@ -262,9 +248,6 @@ export function hatchNewPet(previous: Pet, name: string, species: PetSpecies): P
     species,
     totalFocusMinutes: previous.totalFocusMinutes,
     generation: previous.generation + 1,
-    // A new pet walks the tree from the root. Inheriting the parent's final
-    // form would skip the choices, which are the point of the tree.
-    evolutionPath: [ROOT_NODE],
   })
 }
 
