@@ -1,13 +1,40 @@
 import { useState } from 'react'
-import { Button, Card, SectionTitle, TextInput } from '../components/ui'
+import { ConsentSheet, ParticipantIdStep } from '../components/ConsentSheet'
 import { FloatingShapes } from '../components/Decor'
+import { Button, Card, SectionTitle, TextInput } from '../components/ui'
+import { RESEARCH_CONTACT_EMAIL } from '../lib/consent'
 import { HAPTIC, accentAt } from '../lib/design'
+import type { EnrolmentStatus } from '../lib/types'
 import { useAppStore } from '../store/useAppStore'
 
+const STATUS_LABEL: Record<EnrolmentStatus, string> = {
+  undecided: 'ยังไม่ได้ตัดสินใจ',
+  consented: 'เข้าร่วมอยู่',
+  declined: 'ไม่เข้าร่วม',
+  withdrawn: 'ถอนตัวแล้ว',
+}
+
+const STATUS_COLOR: Record<EnrolmentStatus, string> = {
+  undecided: '#FFE600',
+  consented: '#00F5D4',
+  declined: '#A1A1AA',
+  withdrawn: '#FF6B35',
+}
+
 export function Settings() {
-  const { profile, pet, renamePet, setParticipantId, logOut } = useAppStore()
+  const { profile, pet, renamePet, setParticipantId, logOut, giveConsent, withdrawFromStudy } =
+    useAppStore()
+
   const [name, setName] = useState(pet.name)
-  const [pid, setPid] = useState(profile?.participantId ?? '')
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState<string | undefined>(undefined)
+  const [showSheet, setShowSheet] = useState(false)
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false)
+
+  const enrolment = profile?.enrolment
+  const status: EnrolmentStatus = enrolment?.status ?? 'undecided'
+  const idLocked = Boolean(enrolment?.participantIdSetAt)
+  const needsId = status === 'consented' && !profile?.participantId
 
   return (
     <div className="space-y-7">
@@ -43,12 +70,7 @@ export function Settings() {
             </div>
           </div>
           <div className="mt-4">
-            <Button
-              accent={0}
-              variant="secondary"
-              className="w-full"
-              onClick={() => void logOut()}
-            >
+            <Button accent={0} variant="secondary" className="w-full" onClick={() => void logOut()}>
               ออกจากระบบ
             </Button>
           </div>
@@ -56,31 +78,169 @@ export function Settings() {
       </section>
 
       <section className="space-y-3">
-        <SectionTitle accent={1}>รหัสผู้เข้าร่วมวิจัย</SectionTitle>
+        <SectionTitle accent={1}>การเข้าร่วมวิจัย</SectionTitle>
+
         <Card accent={1}>
-          <p className="text-sm leading-snug text-white/75">
-            กรอกรหัสที่ทีมวิจัยกำหนดให้ เพื่อจับคู่ข้อมูลของคุณกับแบบสอบถาม SAS-SV และ PSQI
-            โดยไม่ต้องเปิดเผยชื่อจริง
-          </p>
-          <div className="mt-4 flex gap-2">
-            <div className="flex-1">
-              <TextInput accent={1} value={pid} onChange={setPid} placeholder="เช่น P001" />
-            </div>
-            <Button
-              accent={1}
-              disabled={!pid.trim()}
-              vibrate={HAPTIC.success}
-              onClick={() => void setParticipantId(pid)}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-black tracking-widest text-white/60 uppercase">
+              สถานะ
+            </span>
+            <span
+              className="rounded-full border-2 px-3 py-1 text-xs font-black"
+              style={{ borderColor: STATUS_COLOR[status], color: STATUS_COLOR[status] }}
             >
-              บันทึก
-            </Button>
+              {STATUS_LABEL[status]}
+            </span>
           </div>
-          {profile?.participantId && (
-            <p className="mt-3 text-xs font-black" style={{ color: accentAt(1) }}>
-              ✓ รหัสปัจจุบัน: {profile.participantId}
+
+          {status === 'consented' && (
+            <>
+              <dl className="mt-4 space-y-2 text-sm">
+                <Row
+                  label="รหัสผู้เข้าร่วม"
+                  value={profile?.participantId || 'ยังไม่ได้ใส่'}
+                  accent={1}
+                />
+                <Row
+                  label="ยินยอมเมื่อ"
+                  value={
+                    enrolment?.consentedAt
+                      ? new Date(enrolment.consentedAt).toLocaleDateString('th-TH')
+                      : '—'
+                  }
+                  accent={2}
+                />
+                <Row label="เวอร์ชันเอกสาร" value={enrolment?.consentVersion ?? '—'} accent={3} />
+              </dl>
+
+              {needsId && (
+                <p
+                  className="mt-4 rounded-xl border-2 border-dashed px-3 py-2 text-xs leading-relaxed font-bold"
+                  style={{ borderColor: '#FF6B35', color: '#FF6B35' }}
+                >
+                  ⚠️ ยังไม่ได้ใส่รหัสผู้เข้าร่วม ข้อมูลของคุณจะยังไม่ถูกนำไปวิเคราะห์
+                </p>
+              )}
+
+              {idLocked && (
+                <p className="mt-3 text-[11px] leading-relaxed text-white/50">
+                  รหัสถูกล็อกไว้เพื่อรักษาความถูกต้องของข้อมูล หากกรอกผิดกรุณาติดต่อ{' '}
+                  {RESEARCH_CONTACT_EMAIL}
+                </p>
+              )}
+            </>
+          )}
+
+          {(status === 'undecided' || status === 'declined') && (
+            <p className="mt-3 text-sm leading-relaxed text-white/75">
+              ตอนนี้ระบบไม่ได้บันทึกข้อมูลใด ๆ เพื่อการวิจัย
+              คุณใช้งานแอปได้เต็มรูปแบบเหมือนเดิม หากเปลี่ยนใจสามารถอ่านเอกสารและเข้าร่วมได้ตลอดเวลา
             </p>
           )}
+
+          {status === 'withdrawn' && (
+            <p className="mt-3 text-sm leading-relaxed text-white/75">
+              คุณถอนตัวเมื่อ{' '}
+              {enrolment?.withdrawnAt
+                ? new Date(enrolment.withdrawnAt).toLocaleDateString('th-TH')
+                : '—'}{' '}
+              ระบบหยุดบันทึกข้อมูลใหม่แล้ว หากต้องการให้ลบข้อมูลที่เก็บไปก่อนหน้านี้ กรุณาติดต่อ{' '}
+              {RESEARCH_CONTACT_EMAIL}
+            </p>
+          )}
+
+          <div className="mt-5 space-y-2">
+            {needsId && !showSheet && (
+              <Button accent={1} className="w-full" onClick={() => setShowSheet(true)}>
+                ใส่รหัสผู้เข้าร่วม
+              </Button>
+            )}
+
+            {status !== 'consented' && !showSheet && (
+              <Button
+                accent={1}
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowSheet(true)}
+              >
+                อ่านเอกสารและเข้าร่วม
+              </Button>
+            )}
+
+            {status === 'consented' && !confirmWithdraw && (
+              <Button
+                accent={3}
+                variant="ghost"
+                className="w-full"
+                onClick={() => setConfirmWithdraw(true)}
+              >
+                ถอนตัวจากงานวิจัย
+              </Button>
+            )}
+
+            {status === 'consented' && confirmWithdraw && (
+              <div
+                className="rounded-2xl border-4 border-dashed p-3"
+                style={{ borderColor: '#FF6B35' }}
+              >
+                <p className="text-sm leading-relaxed font-bold text-white/85">
+                  ยืนยันการถอนตัว? ระบบจะหยุดบันทึกข้อมูลเพื่อการวิจัยทันที
+                  คุณยังใช้งานแอปได้ตามปกติ
+                </p>
+                {/* Saying the data still exists is the honest thing to do. The app
+                    cannot delete another user's records, and promising otherwise
+                    here would be a consent violation dressed up as a feature. */}
+                <p className="mt-2 text-[11px] leading-relaxed text-white/60">
+                  ข้อมูลที่เก็บไปก่อนหน้านี้จะยังอยู่ในระบบ หากต้องการให้ลบ กรุณาติดต่อทีมวิจัย
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button accent={1} variant="outline" onClick={() => setConfirmWithdraw(false)}>
+                    ยกเลิก
+                  </Button>
+                  <Button
+                    accent={3}
+                    variant="outline"
+                    vibrate={HAPTIC.warn}
+                    onClick={() => {
+                      setConfirmWithdraw(false)
+                      void withdrawFromStudy()
+                    }}
+                  >
+                    ยืนยันถอนตัว
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </Card>
+
+        {showSheet && status !== 'consented' && (
+          <ConsentSheet
+            busy={claiming}
+            onAgree={async () => {
+              setClaiming(true)
+              await giveConsent()
+              setClaiming(false)
+            }}
+            onDecline={() => setShowSheet(false)}
+          />
+        )}
+
+        {showSheet && needsId && (
+          <ParticipantIdStep
+            busy={claiming}
+            error={claimError}
+            onSkip={() => setShowSheet(false)}
+            onSubmit={async (code) => {
+              setClaiming(true)
+              setClaimError(undefined)
+              const result = await setParticipantId(code)
+              setClaiming(false)
+              if (result.ok) setShowSheet(false)
+              else setClaimError(result.message)
+            }}
+          />
+        )}
       </section>
 
       <section className="space-y-3">

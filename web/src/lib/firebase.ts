@@ -30,4 +30,9 @@ export const paths = {
   sessions: (uid: string) => `users/${uid}/sessions`,
   screenTimeDays: (uid: string) => `users/${uid}/screenTimeDays`,
   surveys: (uid: string) => `users/${uid}/surveys`,
+  /**
+   * One document per claimed participant code, outside the per-user tree so a
+   * code can be checked for uniqueness without reading anybody's records.
+   */
+  participantId: (code: string) => `participantIds/${code}`,
 }

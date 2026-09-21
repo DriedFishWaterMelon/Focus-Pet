@@ -12,6 +12,7 @@ import {
   todayIso,
 } from '../lib/research'
 import type { ScreenTimeDay } from '../lib/research'
+import { isEnrolled } from '../lib/types'
 import type { ScreenFreeSession } from '../lib/types'
 import { useAppStore } from '../store/useAppStore'
 
@@ -51,6 +52,13 @@ export function Stats() {
   async function saveScreenTime() {
     const minutes = Number(minutesInput)
     if (!profile || !Number.isFinite(minutes) || minutes < 0) return
+
+    // Screen time is research data, so it follows the same rule as sessions:
+    // nothing is written unless the person is actively enrolled.
+    if (!isEnrolled(profile.enrolment)) {
+      pushToast('ต้องเข้าร่วมงานวิจัยก่อนจึงจะบันทึกข้อมูลได้', 'warning')
+      return
+    }
     const entry: ScreenTimeDay = {
       date: todayIso(),
       minutes: Math.round(minutes),

@@ -148,10 +148,47 @@ export interface UserProfile {
   email: string | null
   photoUrl: string | null
   isAnonymous: boolean
-  /** Study participant code, assigned at consent. Empty when not enrolled. */
+  /** Study participant code, claimed at consent. Empty when not enrolled. */
   participantId: string
   /** False until the participant has named their first pet. */
   onboarded: boolean
+  /** Enrolment state. See EnrolmentStatus for why this is not a boolean. */
+  enrolment: Enrolment
+}
+
+/**
+ * Research enrolment, kept deliberately separate from the game state so that
+ * declining or withdrawing never blocks someone from using the app.
+ *
+ * `undecided` and `declined` are distinct: undecided means the consent sheet
+ * has not been answered yet, declined means the person read it and said no.
+ * Collapsing them into one boolean would make it impossible to tell a refusal
+ * from an unfinished sign-up when reporting recruitment numbers.
+ */
+export type EnrolmentStatus = 'undecided' | 'consented' | 'declined' | 'withdrawn'
+
+export interface Enrolment {
+  status: EnrolmentStatus
+  /** Which version of the consent text this person actually agreed to. */
+  consentVersion: string | null
+  consentedAt: number | null
+  participantIdSetAt: number | null
+  withdrawnAt: number | null
+}
+
+export function emptyEnrolment(): Enrolment {
+  return {
+    status: 'undecided',
+    consentVersion: null,
+    consentedAt: null,
+    participantIdSetAt: null,
+    withdrawnAt: null,
+  }
+}
+
+/** Research data may only be written while this is true. */
+export function isEnrolled(enrolment: Enrolment): boolean {
+  return enrolment.status === 'consented'
 }
 
 /** What happened to the pet while the app was closed, shown on the next open. */

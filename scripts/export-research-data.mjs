@@ -128,14 +128,23 @@ async function main() {
   const daily = new Map()
 
   let skipped = 0
+  let withdrawn = 0
 
   for (const userDoc of usersSnap.docs) {
     const uid = userDoc.id
     const user = userDoc.data() ?? {}
     const participantId = (user.participantId ?? '').trim()
+    const enrolmentStatus = user.enrolmentStatus ?? 'undecided'
 
-    if (!participantId && !args.all) {
+    // Only people who consented and were given a code belong in the dataset.
+    // Someone who declined, withdrew, or never answered the consent sheet is
+    // excluded — their records must not reach the analysis even if the app
+    // happened to write some before enrolment state existed.
+    const eligible = participantId !== '' && enrolmentStatus === 'consented'
+
+    if (!eligible && !args.all) {
       skipped++
+      if (enrolmentStatus === 'withdrawn') withdrawn++
       continue
     }
 
@@ -208,7 +217,11 @@ async function main() {
       pid,
       uid,
       user.onboarded === true ? 1 : 0,
+      enrolmentStatus,
+      user.consentVersion ?? '',
       iso(user.consentedAt),
+      iso(user.participantIdSetAt),
+      iso(user.withdrawnAt),
       pet.name ?? '',
       pet.species ?? '',
       pet.generation ?? '',
@@ -237,7 +250,8 @@ async function main() {
   writeCsv(
     outDir,
     'participants.csv',
-    ['participant_id', 'uid', 'onboarded', 'consented_at', 'pet_name', 'pet_species',
+    ['participant_id', 'uid', 'onboarded', 'enrolment_status', 'consent_version',
+     'consented_at', 'participant_id_set_at', 'withdrawn_at', 'pet_name', 'pet_species',
      'pet_generation', 'pet_level', 'total_focus_minutes', 'streak_days', 'pet_alive',
      'pet_died_at', 'pet_born_at', 'session_count', 'screentime_day_count'],
     participantRows,
@@ -279,13 +293,27 @@ async function main() {
   console.log(`\nเสร็จแล้ว → ${outDir}`)
   console.log(`ผู้เข้าร่วมที่มีรหัส: ${participantRows.length} คน`)
   if (skipped > 0) {
-    console.log(`ข้ามผู้ใช้ที่ยังไม่มีรหัสผู้เข้าร่วม: ${skipped} คน (ใช้ --all ถ้าต้องการรวมด้วย)`)
+    console.log(`ข้ามผู้ที่ยังไม่ได้ยินยอมหรือไม่มีรหัส: ${skipped} คน (ใช้ --all ถ้าต้องการรวมด้วย)`)
+  }
+  if (withdrawn > 0) {
+    console.log(`ในจำนวนนั้นเป็นผู้ถอนตัว: ${withdrawn} คน`)
+  }
+
+  // Consent versions are reported because a study that enrolled people under
+  // two different consent texts has to say so in the write-up.
+  const versions = new Set(participantRows.map((r) => r[4]).filter(Boolean))
+  if (versions.size > 1) {
+    console.log(`
+⚠️ ผู้เข้าร่วมยินยอมภายใต้เอกสารต่างเวอร์ชันกัน: ${[...versions].join(', ')}`)
+    console.log('   ต้องระบุเรื่องนี้ไว้ในรายงานผลการวิจัย')
   }
 
   // A dataset with no verified sessions usually means participants are only
   // self-reporting, which changes how the results must be written up.
-  const verified = sessionRows.filter((r) => r[13] === 'web_timer_verified').length
-  const interrupted = sessionRows.filter((r) => r[13] === 'web_timer_interrupted').length
+  // sessionRows keeps its own shape; source is its last column either way.
+  const sourceOf = (row) => row[row.length - 1]
+  const verified = sessionRows.filter((r) => sourceOf(r) === 'web_timer_verified').length
+  const interrupted = sessionRows.filter((r) => sourceOf(r) === 'web_timer_interrupted').length
   console.log(`\nคุณภาพข้อมูลเซสชัน:`)
   console.log(`  จับเวลาบนเว็บ (เชื่อถือได้):  ${verified}`)
   console.log(`  ถูกขัดจังหวะ (ควรแยกวิเคราะห์): ${interrupted}`)

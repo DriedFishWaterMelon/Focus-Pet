@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Burst, ScreenFlash } from './Burst'
 import { BackgroundWord, FloatingShapes, Marquee } from './Decor'
 import { PetCanvas } from './PetCanvas'
+import { ConsentSheet, ParticipantIdStep } from './ConsentSheet'
 import { Button, Card, Modal, TextInput } from './ui'
 import { HAPTIC, accentAt, clashAt, haptic, readableOn } from '../lib/design'
 import { defaultPet } from '../lib/gameLogic'
@@ -59,10 +60,32 @@ function SpeciesPicker({
   )
 }
 
-/** First run: name the pet and pick a species before seeing the app. */
+/**
+ * Onboarding order matters ethically: the consent sheet comes after a plain
+ * explanation of what the app is, but before the person names a pet. Asking for
+ * consent only once someone has designed and named a companion would lean on
+ * sunk cost, and consent given under that pressure is not freely given.
+ */
+type Step = 'intro' | 'consent' | 'participantId' | 'species' | 'name'
+
+const STEP_ORDER: Step[] = ['intro', 'consent', 'participantId', 'species', 'name']
+
+const BACKDROP: Record<Step, string> = {
+  intro: 'HI',
+  consent: 'READ',
+  participantId: 'CODE',
+  species: 'PICK',
+  name: 'NAME',
+}
+
 export function Onboarding() {
   const completeOnboarding = useAppStore((s) => s.completeOnboarding)
-  const [step, setStep] = useState(0)
+  const giveConsent = useAppStore((s) => s.giveConsent)
+  const declineConsent = useAppStore((s) => s.declineConsent)
+  const setParticipantId = useAppStore((s) => s.setParticipantId)
+  const [step, setStep] = useState<Step>('intro')
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState<string | undefined>(undefined)
   const [name, setName] = useState('')
   const [species, setSpecies] = useState<PetSpecies>('leaf')
   const [saving, setSaving] = useState(false)
@@ -78,15 +101,50 @@ export function Onboarding() {
   return (
     <div className="relative flex min-h-screen flex-col justify-center overflow-hidden p-4">
       <BackgroundWord
-        word={['HI', 'PICK', 'NAME'][step]}
+        word={BACKDROP[step]}
         className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-        accent={step}
+        accent={STEP_ORDER.indexOf(step)}
       />
-      <FloatingShapes count={9} seed={step * 7} />
+      <FloatingShapes count={9} seed={STEP_ORDER.indexOf(step) * 7} />
 
       <div className="relative z-10 mx-auto w-full max-w-sm">
-        <Card accent={step} className="p-6">
-          {step === 0 && (
+        {step === 'consent' && (
+          <ConsentSheet
+            busy={claiming}
+            onAgree={async () => {
+              setClaiming(true)
+              await giveConsent()
+              setClaiming(false)
+              setStep('participantId')
+            }}
+            onDecline={async () => {
+              setClaiming(true)
+              await declineConsent()
+              setClaiming(false)
+              setStep('species')
+            }}
+          />
+        )}
+
+        {step === 'participantId' && (
+          <ParticipantIdStep
+            busy={claiming}
+            error={claimError}
+            onSkip={() => setStep('species')}
+            onSubmit={async (code) => {
+              setClaiming(true)
+              setClaimError(undefined)
+              const result = await setParticipantId(code)
+              setClaiming(false)
+              if (result.ok) setStep('species')
+              else setClaimError(result.message)
+            }}
+          />
+        )}
+
+        {step !== 'consent' && step !== 'participantId' && (
+        <Card accent={STEP_ORDER.indexOf(step)} className="p-6">
+          {step === 'intro' && (
             <div className="text-center">
               <PetCanvas pet={preview} />
               <h1
@@ -111,14 +169,14 @@ export function Onboarding() {
                 </p>
               </div>
               <div className="mt-5">
-                <Button accent={0} className="w-full py-4" onClick={() => setStep(1)}>
+                <Button accent={0} className="w-full py-4" onClick={() => setStep('consent')}>
                   เริ่มเลย
                 </Button>
               </div>
             </div>
           )}
 
-          {step === 1 && (
+          {step === 'species' && (
             <div>
               <h2
                 className="ts-2 text-3xl font-black uppercase"
@@ -134,17 +192,17 @@ export function Onboarding() {
               </div>
               <SpeciesPicker selected={species} onSelect={setSpecies} />
               <div className="mt-5 flex gap-2">
-                <Button accent={3} variant="secondary" onClick={() => setStep(0)}>
+                <Button accent={3} variant="secondary" onClick={() => setStep('intro')}>
                   กลับ
                 </Button>
-                <Button accent={1} className="flex-1" onClick={() => setStep(2)}>
+                <Button accent={1} className="flex-1" onClick={() => setStep('name')}>
                   ถัดไป
                 </Button>
               </div>
             </div>
           )}
 
-          {step === 2 && (
+          {step === 'name' && (
             <div>
               <h2
                 className="ts-2 text-3xl font-black uppercase"
@@ -164,7 +222,7 @@ export function Onboarding() {
                 onEnter={() => name.trim() && finish()}
               />
               <div className="mt-5 flex gap-2">
-                <Button accent={3} variant="secondary" onClick={() => setStep(1)}>
+                <Button accent={3} variant="secondary" onClick={() => setStep('species')}>
                   กลับ
                 </Button>
                 <Button
@@ -179,6 +237,7 @@ export function Onboarding() {
             </div>
           )}
         </Card>
+        )}
       </div>
     </div>
   )

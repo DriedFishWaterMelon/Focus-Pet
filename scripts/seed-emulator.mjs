@@ -42,7 +42,15 @@ const base = Date.parse('2026-09-15T10:00:00Z')
 
 async function seedUser(uid, participantId, opts = {}) {
   const ref = db.collection('users').doc(uid)
-  await ref.set({ participantId, onboarded: true, consentedAt: base })
+  await ref.set({
+    participantId,
+    onboarded: true,
+    enrolmentStatus: opts.status ?? 'consented',
+    consentVersion: opts.consentVersion ?? '2026-09-21.v1',
+    consentedAt: base,
+    participantIdSetAt: participantId ? base : null,
+    withdrawnAt: opts.status === 'withdrawn' ? base + DAY * 2 : null,
+  })
 
   await ref.collection('state').doc('pet').set({
     name: opts.name ?? 'Sproutly',
@@ -87,9 +95,15 @@ async function seedUser(uid, participantId, opts = {}) {
 await seedUser('uid_alpha', 'P001', { name: 'น้องเขียว', sessions: 3 })
 await seedUser('uid_beta', 'P002', { name: 'Nara', species: 'flame', sessions: 2, alive: false, generation: 2 })
 
+// Enrolment states the export must filter out. Each one has real sessions, so
+// a filtering bug shows up as extra rows rather than as silence.
+await seedUser('uid_gamma', 'P003', { name: 'Withdrawn', sessions: 2, status: 'withdrawn' })
+await seedUser('uid_delta', 'P004', { name: 'Declined', sessions: 1, status: 'declined' })
+await seedUser('uid_epsilon', 'P005', { name: 'Undecided', sessions: 1, status: 'undecided' })
+
 // Someone who opened the app but never enrolled. The export must leave this
 // person out unless --all is passed, or they would pollute the dataset.
-await db.collection('users').doc('uid_casual').set({ participantId: '', onboarded: true })
+await db.collection('users').doc('uid_casual').set({ participantId: '', onboarded: true, enrolmentStatus: 'undecided' })
 await db.collection('users').doc('uid_casual').collection('sessions').add({
   targetMinutes: 15,
   actualMinutes: 15,
@@ -103,4 +117,8 @@ await db.collection('users').doc('uid_casual').collection('sessions').add({
   source: 'web_timer_verified',
 })
 
-console.log('seeded: P001 (3 sessions), P002 (2 sessions, pet died), 1 unenrolled user')
+console.log(
+  'seeded: P001 consented (3 sessions), P002 consented+died (2), ' +
+    'P003 withdrawn (2), P004 declined (1), P005 undecided (1), 1 unenrolled',
+)
+console.log('the export should include only P001 and P002 by default')

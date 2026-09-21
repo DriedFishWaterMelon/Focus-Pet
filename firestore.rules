@@ -8,8 +8,8 @@ rules_version = '2';
 // documents under their own users/{uid} tree, and nobody can read anyone else's.
 //
 // Note for the research team: this means no participant can see another
-// participant's screen time, and it also means the aggregate export has to be run
-// with admin credentials (Firebase Console or a service account), not from the
+// participant's screen time, and it also means the aggregate export has to be
+// run with admin credentials (scripts/export-research-data.mjs), not from the
 // participant-facing web app.
 
 service cloud.firestore {
@@ -22,6 +22,33 @@ service cloud.firestore {
       match /{subcollection=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
+    }
+
+    // Participant code claims.
+    //
+    // Codes must be unique across the study, or two people typing the same code
+    // would have their records merged. Uniqueness cannot be checked by reading
+    // other users — the rule above forbids exactly that — so each claimed code
+    // gets its own document here and the claim is a transaction that fails if
+    // the document already exists.
+    //
+    // `get` is open to any signed-in user because the only thing a single
+    // lookup reveals is whether a code is already spoken for. `list` stays
+    // closed so nobody can enumerate the roster of participants.
+    match /participantIds/{code} {
+      allow get: if request.auth != null;
+      allow list: if false;
+
+      // A claim may only be created once, only by the user it names, and may
+      // carry nothing beyond the owner and the timestamp.
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['uid', 'claimedAt']);
+
+      // Claims are permanent. Releasing or reassigning a code is a research
+      // team decision made with admin credentials, never from the client —
+      // otherwise a participant could free their code and take someone else's.
+      allow update, delete: if false;
     }
 
     // Everything else is closed.

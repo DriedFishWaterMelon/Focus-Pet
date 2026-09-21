@@ -21,6 +21,14 @@ import {
   playWithPet,
 } from '../lib/gameLogic'
 import { logSession } from '../lib/research'
+import {
+  claimParticipantId,
+  enrolmentFromDoc,
+  recordConsent,
+  recordDecline,
+  recordWithdrawal,
+} from '../lib/enrolment'
+import { isEnrolled } from '../lib/types'
 import type {
   Achievement,
   AwayReport,
@@ -92,7 +100,10 @@ interface AppState {
   pat: () => Promise<void>
   purchase: (itemId: string) => Promise<void>
   renamePet: (name: string) => Promise<void>
-  setParticipantId: (id: string) => Promise<void>
+  giveConsent: () => Promise<void>
+  declineConsent: () => Promise<void>
+  withdrawFromStudy: () => Promise<void>
+  setParticipantId: (id: string) => Promise<{ ok: boolean; message?: string }>
 
   pushToast: (message: string, tone?: Toast['tone']) => void
   dismissToast: (id: number) => void
@@ -140,6 +151,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           isAnonymous: user.isAnonymous,
           participantId: (data.participantId as string) ?? '',
           onboarded: Boolean(data.onboarded),
+          enrolment: enrolmentFromDoc(data),
         },
         authLoading: false,
       })
@@ -168,7 +180,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   logOut: async () => {
     await signOut(auth)
-    set({ profile: null, pet: defaultPet(), inventory: defaultInventory(), achievements: [] })
+    set({
+      profile: null,
+      pet: defaultPet(),
+      inventory: defaultInventory(),
+      achievements: [],
+      unlockedAt: {},
+      awayReport: null,
+    })
   },
 
   loadUserData: async (uid) => {
@@ -361,7 +380,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Research data is written last and independently of the game outcome, so a
     // game-side failure can never cost us the participant's recorded session.
-    if (profile) await logSession(profile.uid, outcome.session)
+    //
+    // Nothing is logged unless the person is actively enrolled. Someone who
+    // declined, withdrew, or has not answered the consent sheet still gets the
+    // full game; their behaviour simply never enters the dataset.
+    if (profile && isEnrolled(profile.enrolment)) {
+      await logSession(profile.uid, outcome.session)
+    }
   },
 
   feed: async (item) => {
@@ -403,17 +428,48 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().pushToast('เปลี่ยนชื่อแล้ว', 'success')
   },
 
-  setParticipantId: async (id) => {
+  giveConsent: async () => {
     const profile = get().profile
     if (!profile) return
-    const participantId = id.trim()
-    await setDoc(
-      doc(db, paths.user(profile.uid)),
-      { participantId, consentedAt: Date.now() },
-      { merge: true },
-    )
-    set({ profile: { ...profile, participantId } })
-    get().pushToast('บันทึกรหัสผู้เข้าร่วมแล้ว', 'success')
+    const enrolment = await recordConsent(profile.uid)
+    set({ profile: { ...profile, enrolment } })
+  },
+
+  declineConsent: async () => {
+    const profile = get().profile
+    if (!profile) return
+    const enrolment = await recordDecline(profile.uid)
+    set({ profile: { ...profile, enrolment } })
+    get().pushToast('บันทึกแล้ว ใช้งานแอปได้ตามปกติ', 'info')
+  },
+
+  withdrawFromStudy: async () => {
+    const profile = get().profile
+    if (!profile) return
+    const enrolment = await recordWithdrawal(profile.uid, profile.enrolment)
+    set({ profile: { ...profile, enrolment } })
+    get().pushToast('ถอนตัวแล้ว ระบบหยุดบันทึกข้อมูลวิจัย', 'info')
+  },
+
+  setParticipantId: async (id) => {
+    const profile = get().profile
+    if (!profile) return { ok: false, message: 'ยังไม่ได้เข้าสู่ระบบ' }
+
+    const result = await claimParticipantId(profile.uid, id, profile.enrolment)
+    if (!result.ok) {
+      get().pushToast(result.message, 'warning')
+      return { ok: false, message: result.message }
+    }
+
+    set({
+      profile: {
+        ...profile,
+        participantId: result.participantId,
+        enrolment: { ...profile.enrolment, participantIdSetAt: Date.now() },
+      },
+    })
+    get().pushToast(`บันทึกรหัส ${result.participantId} แล้ว`, 'success')
+    return { ok: true }
   },
 
   pushToast: (message, tone = 'info') => {
