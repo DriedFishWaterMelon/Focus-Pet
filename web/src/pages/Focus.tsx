@@ -20,19 +20,14 @@ export function Focus() {
     remainingSeconds,
     selectedTag,
     leftTabDuringSession,
-    celebration,
     setTargetMinutes,
     setSelectedTag,
     startFocus,
     tickFocus,
     markLeftTab,
     endFocus,
-    dismissCelebration,
   } = useAppStore()
 
-  // The timer runs off wall-clock time rather than counting intervals, because
-  // browsers throttle timers in background tabs and a naive counter would drift
-  // badly — which would put wrong minutes into the research data.
   useEffect(() => {
     if (!isFocusActive) return
     const interval = window.setInterval(() => tickFocus(), 1000)
@@ -51,7 +46,6 @@ export function Focus() {
     return () => document.removeEventListener('visibilitychange', onHidden)
   }, [markLeftTab])
 
-  // Keep the screen awake during a session where the browser allows it.
   useEffect(() => {
     if (!isFocusActive || !('wakeLock' in navigator)) return
     let sentinel: WakeLockSentinel | null = null
@@ -69,23 +63,39 @@ export function Focus() {
   }, [isFocusActive])
 
   const progress = isFocusActive ? 1 - remainingSeconds / (targetMinutes * 60) : 0
+  const circumference = 2 * Math.PI * 88
 
   return (
     <div className="space-y-5">
       <Card className="text-center">
-        <PetCanvas pet={pet} isFocusActive={isFocusActive} />
-
-        <div className="mt-4">
-          <p className="font-mono text-6xl font-bold tabular-nums tracking-tight">
-            {formatClock(remainingSeconds)}
-          </p>
-          <div className="mx-auto mt-4 h-1.5 max-w-xs overflow-hidden rounded-full bg-[#27272a]">
-            <div
-              className="h-full rounded-full bg-[#0ea5e9] transition-all duration-1000"
-              style={{ width: `${progress * 100}%` }}
-            />
-          </div>
+        <div className="relative mx-auto w-fit">
+          {/* Progress ring around the pet, so the pet itself is the timer. */}
+          <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full -rotate-90">
+            <circle cx="100" cy="100" r="88" fill="none" stroke="#27272a" strokeWidth="4" />
+            {isFocusActive && (
+              <circle
+                cx="100"
+                cy="100"
+                r="88"
+                fill="none"
+                stroke="#0ea5e9"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - progress)}
+                style={{ transition: 'stroke-dashoffset 1s linear' }}
+              />
+            )}
+          </svg>
+          <PetCanvas pet={pet} isFocusActive={isFocusActive} />
         </div>
+
+        <p className="mt-5 font-mono text-6xl font-bold tabular-nums tracking-tight">
+          {formatClock(remainingSeconds)}
+        </p>
+        <p className="mt-1 text-xs text-[#71717a]">
+          {isFocusActive ? `กำลังทำ · ${selectedTag}` : `เป้าหมาย ${targetMinutes} นาที`}
+        </p>
 
         {isFocusActive && leftTabDuringSession && (
           <p className="mt-4 rounded-xl bg-[#f59e0b]/10 px-3 py-2 text-xs text-[#fbbf24]">
@@ -97,7 +107,7 @@ export function Focus() {
 
       {!isFocusActive && (
         <>
-          <Card>
+          <Card animate>
             <p className="mb-3 text-sm text-[#a1a1aa]">ตั้งเป้าหมาย (นาที)</p>
             <div className="grid grid-cols-5 gap-2">
               {PRESETS.map((minutes) => (
@@ -105,7 +115,7 @@ export function Focus() {
                   key={minutes}
                   type="button"
                   onClick={() => setTargetMinutes(minutes)}
-                  className={`rounded-xl py-2.5 text-sm font-medium transition-colors ${
+                  className={`rounded-xl py-2.5 text-sm font-medium transition-all active:scale-95 ${
                     targetMinutes === minutes
                       ? 'bg-[#fafafa] text-[#09090b]'
                       : 'border border-[#3f3f46] text-[#a1a1aa] hover:bg-[#27272a]'
@@ -117,7 +127,7 @@ export function Focus() {
             </div>
           </Card>
 
-          <Card>
+          <Card animate>
             <p className="mb-3 text-sm text-[#a1a1aa]">กำลังทำอะไร</p>
             <div className="flex flex-wrap gap-2">
               {TAGS.map((tag) => (
@@ -125,7 +135,7 @@ export function Focus() {
                   key={tag}
                   type="button"
                   onClick={() => setSelectedTag(tag)}
-                  className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
+                  className={`rounded-full px-3.5 py-1.5 text-sm transition-all active:scale-95 ${
                     selectedTag === tag
                       ? 'bg-[#0ea5e9] text-white'
                       : 'border border-[#3f3f46] text-[#a1a1aa] hover:bg-[#27272a]'
@@ -144,35 +154,17 @@ export function Focus() {
           ยกเลิกเซสชัน
         </Button>
       ) : (
-        <Button className="w-full py-3.5 text-base" onClick={startFocus}>
+        <Button variant="accent" className="w-full py-3.5 text-base" onClick={startFocus}>
           เริ่ม {targetMinutes} นาที
         </Button>
       )}
 
-      {celebration && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <Card className="w-full max-w-sm text-center">
-            <p className="text-5xl">{celebration.completed ? '🎉' : '👍'}</p>
-            <h2 className="mt-3 text-xl font-semibold">
-              {celebration.completed ? 'สำเร็จแล้ว!' : 'จบเซสชัน'}
-            </h2>
-            <p className="mt-1 text-sm text-[#a1a1aa]">
-              ปลอดหน้าจอไป {celebration.actualMinutes} นาที
-            </p>
-            <div className="mt-4 flex justify-center gap-6 text-sm">
-              <span className="text-[#8b5cf6]">+{celebration.expEarned} EXP</span>
-              <span className="text-[#f59e0b]">+{celebration.coinsEarned} coins</span>
-            </div>
-            {celebration.itemRewardName && (
-              <p className="mt-3 rounded-xl bg-[#27272a] px-3 py-2 text-sm">
-                🎁 ได้รับ {celebration.itemRewardName}
-              </p>
-            )}
-            <Button className="mt-5 w-full" onClick={dismissCelebration}>
-              เยี่ยม!
-            </Button>
-          </Card>
-        </div>
+      {!isFocusActive && (
+        <p className="pb-2 text-center text-xs leading-relaxed text-[#52525b]">
+          วางมือถือลงแล้วปล่อยให้หน้านี้เปิดไว้
+          <br />
+          {pet.name} จะได้ EXP และพลังชีวิตจากเวลาที่คุณไม่ได้ใช้หน้าจอ
+        </p>
       )}
     </div>
   )

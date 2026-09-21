@@ -1,6 +1,6 @@
-// Domain model ported from the Android app (app/src/main/java/com/example/data/model/Models.kt).
-// Field names are kept identical so the Firestore documents written by the Android
-// app and by this web app stay compatible with each other.
+// Domain model. Originally ported from the Android app
+// (app/src/main/java/com/example/data/model/Models.kt) and since extended with
+// the survival systems (decay, sickness, death) that the Android version lacks.
 
 export type PetStage = 'BABY' | 'JUVENILE' | 'ADULT' | 'MYSTIC' | 'LEGEND'
 
@@ -12,34 +12,80 @@ export const PET_STAGE_LABELS: Record<PetStage, string> = {
   LEGEND: 'Celestial Spirit',
 }
 
-export type PetMood = 'ECSTATIC' | 'HAPPY' | 'CONTENT' | 'HUNGRY' | 'TIRED' | 'MEDITATING'
+export const PET_STAGE_LABELS_TH: Record<PetStage, string> = {
+  BABY: 'เจ้าหน่อน้อย',
+  JUVENILE: 'หน่อซุกซน',
+  ADULT: 'ผู้พิทักษ์',
+  MYSTIC: 'ผู้เฒ่าลี้ลับ',
+  LEGEND: 'วิญญาณสวรรค์',
+}
+
+export type PetMood =
+  | 'ECSTATIC'
+  | 'HAPPY'
+  | 'CONTENT'
+  | 'HUNGRY'
+  | 'TIRED'
+  | 'MEDITATING'
+  | 'SICK'
+  | 'DYING'
+  | 'DEAD'
 
 export const PET_MOOD_INFO: Record<PetMood, { emoji: string; label: string }> = {
-  ECSTATIC: { emoji: '✨', label: 'Ecstatic & Blooming' },
-  HAPPY: { emoji: '😊', label: 'Happy & Energetic' },
-  CONTENT: { emoji: '🌿', label: 'Calm & Peaceful' },
-  HUNGRY: { emoji: '🍽️', label: 'Tummy is Rumbling' },
-  TIRED: { emoji: '😴', label: 'Drowsy & Resting' },
-  MEDITATING: { emoji: '🧘', label: 'In Deep Focus' },
+  ECSTATIC: { emoji: '✨', label: 'มีความสุขสุด ๆ' },
+  HAPPY: { emoji: '😊', label: 'ร่าเริงแจ่มใส' },
+  CONTENT: { emoji: '🌿', label: 'สงบ สบายใจ' },
+  HUNGRY: { emoji: '🍽️', label: 'ท้องร้องแล้ว' },
+  TIRED: { emoji: '😴', label: 'ง่วงนอน หมดแรง' },
+  MEDITATING: { emoji: '🧘', label: 'กำลังทำสมาธิ' },
+  SICK: { emoji: '🤒', label: 'ไม่สบาย ต้องการการดูแล' },
+  DYING: { emoji: '💔', label: 'อ่อนแอมาก ใกล้จะไม่ไหวแล้ว' },
+  DEAD: { emoji: '🪦', label: 'จากไปแล้ว' },
+}
+
+export type PetSpecies = 'leaf' | 'flame' | 'water' | 'stone'
+
+export const SPECIES_INFO: Record<
+  PetSpecies,
+  { name: string; color: string; description: string }
+> = {
+  leaf: { name: 'หน่อไม้ใบเขียว', color: '#10b981', description: 'ใจเย็น โตสม่ำเสมอ' },
+  flame: { name: 'เปลวไฟน้อย', color: '#f59e0b', description: 'กระตือรือร้น ชอบท้าทาย' },
+  water: { name: 'หยดน้ำใส', color: '#0ea5e9', description: 'อ่อนโยน ปรับตัวเก่ง' },
+  stone: { name: 'ก้อนหินมีชีวิต', color: '#8b5cf6', description: 'อดทน ไม่ยอมแพ้ง่าย' },
 }
 
 export interface Pet {
   name: string
-  species: string
+  species: PetSpecies
   /** 0 to 100 */
   hunger: number
   /** 0 to 100 */
   happiness: number
   /** 0 to 100 */
   energy: number
+  /**
+   * 0 to 100. Only falls while a core stat is fully depleted, and it is what
+   * actually kills the pet. Recovers slowly once the pet is cared for again.
+   */
+  health: number
   exp: number
   level: number
   stage: PetStage
   totalFocusMinutes: number
   streakDays: number
+  /** ISO date (YYYY-MM-DD) of the most recent completed session, for the streak. */
+  lastSessionDate: string
   coins: number
+  /** When decay was last applied. Decay is derived from elapsed wall-clock time. */
+  lastTickAt: number
   lastFedTimestamp: number
   lastFocusTimestamp: number
+  bornAt: number
+  isAlive: boolean
+  diedAt: number | null
+  /** Which pet this is: the first is 1, the one hatched after a death is 2, etc. */
+  generation: number
 }
 
 export interface ScreenFreeSession {
@@ -53,7 +99,7 @@ export interface ScreenFreeSession {
   coinsEarned: number
   itemRewardName: string | null
   tag: string
-  /** How the duration was established. Critical for research validity — see research.ts. */
+  /** How the duration was established. Critical for research validity. */
   source: SessionSource
 }
 
@@ -63,7 +109,7 @@ export interface ScreenFreeSession {
  * the same evidential weight.
  */
 export type SessionSource =
-  /** Timed by the browser with the tab visible the whole time. Strongest evidence. */
+  /** Timed by the browser with the tab visible the whole time. Strongest on web. */
   | 'web_timer_verified'
   /** Timed by the browser, but the user left the tab during the session. */
   | 'web_timer_interrupted'
@@ -72,7 +118,7 @@ export type SessionSource =
   /** Measured by the Android companion app via UsageStatsManager. Strongest of all. */
   | 'android_usage_stats'
 
-export type ItemCategory = 'FOOD' | 'TOY' | 'POTION' | 'BADGE'
+export type ItemCategory = 'FOOD' | 'TOY' | 'POTION' | 'BADGE' | 'MEDICINE'
 
 export interface InventoryItem {
   id: string
@@ -83,8 +129,17 @@ export interface InventoryItem {
   hungerBoost: number
   happinessBoost: number
   energyBoost: number
+  healthBoost: number
   description: string
   price: number
+}
+
+export interface Achievement {
+  id: string
+  name: string
+  description: string
+  iconEmoji: string
+  unlockedAt: number | null
 }
 
 export interface UserProfile {
@@ -95,4 +150,17 @@ export interface UserProfile {
   isAnonymous: boolean
   /** Study participant code, assigned at consent. Empty when not enrolled. */
   participantId: string
+  /** False until the participant has named their first pet. */
+  onboarded: boolean
+}
+
+/** What happened to the pet while the app was closed, shown on the next open. */
+export interface AwayReport {
+  hoursAway: number
+  hungerLost: number
+  happinessLost: number
+  energyLost: number
+  healthLost: number
+  died: boolean
+  becameSick: boolean
 }

@@ -26,6 +26,7 @@ export const paths = {
   user: (uid: string) => `users/${uid}`,
   pet: (uid: string) => `users/${uid}/state/pet`,
   inventory: (uid: string) => `users/${uid}/state/inventory`,
+  achievements: (uid: string) => `users/${uid}/state/achievements`,
   sessions: (uid: string) => `users/${uid}/sessions`,
   screenTimeDays: (uid: string) => `users/${uid}/screenTimeDays`,
   surveys: (uid: string) => `users/${uid}/surveys`,

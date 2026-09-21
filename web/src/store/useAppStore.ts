@@ -1,5 +1,4 @@
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
   signInAnonymously,
   signInWithPopup,
@@ -8,36 +7,66 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { create } from 'zustand'
 import { auth, db, googleProvider, paths } from '../lib/firebase'
+import { evaluateAchievements } from '../lib/achievements'
 import {
+  applyDecay,
+  buyItem,
   completeFocusSession,
   defaultInventory,
   defaultPet,
   feedPet,
+  grantItem,
+  hatchNewPet,
   itemIdForRewardName,
   playWithPet,
 } from '../lib/gameLogic'
 import { logSession } from '../lib/research'
-import type { InventoryItem, Pet, ScreenFreeSession, SessionSource, UserProfile } from '../lib/types'
+import type {
+  Achievement,
+  AwayReport,
+  InventoryItem,
+  Pet,
+  PetSpecies,
+  ScreenFreeSession,
+  SessionSource,
+  UserProfile,
+} from '../lib/types'
+
+export interface Toast {
+  id: number
+  message: string
+  tone: 'info' | 'success' | 'warning' | 'danger'
+}
+
+export interface Celebration {
+  kind: 'session' | 'levelUp' | 'evolution' | 'achievement'
+  session?: Omit<ScreenFreeSession, 'id'>
+  title: string
+  detail: string
+  emoji: string
+}
 
 interface AppState {
-  // Auth
   profile: UserProfile | null
   authLoading: boolean
   authError: string | null
 
-  // Game
   pet: Pet
   inventory: InventoryItem[]
+  achievements: Achievement[]
+  unlockedAt: Record<string, number>
   loading: boolean
+  /** What happened to the pet while the app was closed. Shown once, then cleared. */
+  awayReport: AwayReport | null
 
-  // Focus session
   isFocusActive: boolean
   targetMinutes: number
   remainingSeconds: number
   selectedTag: string
-  /** True once the participant has switched tabs or minimised during this session. */
   leftTabDuringSession: boolean
-  celebration: Omit<ScreenFreeSession, 'id'> | null
+
+  celebrations: Celebration[]
+  toasts: Toast[]
 
   listenToAuth: () => () => void
   signInGoogle: () => Promise<void>
@@ -47,6 +76,10 @@ interface AppState {
   loadUserData: (uid: string) => Promise<void>
   persistPet: (pet: Pet) => Promise<void>
   persistInventory: (items: InventoryItem[]) => Promise<void>
+  tickDecay: () => void
+
+  completeOnboarding: (name: string, species: PetSpecies) => Promise<void>
+  revivePet: (name: string, species: PetSpecies) => Promise<void>
 
   setTargetMinutes: (minutes: number) => void
   setSelectedTag: (tag: string) => void
@@ -54,13 +87,20 @@ interface AppState {
   tickFocus: () => void
   markLeftTab: () => void
   endFocus: (completed: boolean) => Promise<void>
-  dismissCelebration: () => void
 
   feed: (item: InventoryItem) => Promise<void>
   pat: () => Promise<void>
+  purchase: (itemId: string) => Promise<void>
   renamePet: (name: string) => Promise<void>
   setParticipantId: (id: string) => Promise<void>
+
+  pushToast: (message: string, tone?: Toast['tone']) => void
+  dismissToast: (id: number) => void
+  dismissCelebration: () => void
+  dismissAwayReport: () => void
 }
+
+let toastSeq = 0
 
 export const useAppStore = create<AppState>((set, get) => ({
   profile: null,
@@ -69,14 +109,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   pet: defaultPet(),
   inventory: defaultInventory(),
+  achievements: [],
+  unlockedAt: {},
   loading: false,
+  awayReport: null,
 
   isFocusActive: false,
   targetMinutes: 25,
   remainingSeconds: 25 * 60,
   selectedTag: 'Deep Work',
   leftTabDuringSession: false,
-  celebration: null,
+
+  celebrations: [],
+  toasts: [],
 
   listenToAuth: () =>
     onAuthStateChanged(auth, async (user) => {
@@ -85,7 +130,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         return
       }
       const userDoc = await getDoc(doc(db, paths.user(user.uid)))
-      const participantId = (userDoc.data()?.participantId as string) ?? ''
+      const data = userDoc.data() ?? {}
       set({
         profile: {
           uid: user.uid,
@@ -93,7 +138,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           email: user.email,
           photoUrl: user.photoURL,
           isAnonymous: user.isAnonymous,
-          participantId,
+          participantId: (data.participantId as string) ?? '',
+          onboarded: Boolean(data.onboarded),
         },
         authLoading: false,
       })
@@ -106,7 +152,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       await signInWithPopup(auth, googleProvider)
     } catch (error) {
       const code = (error as { code?: string }).code ?? ''
-      // Closing the popup is a normal user action, not an error worth showing.
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return
       set({ authError: (error as Error).message })
     }
@@ -123,37 +168,114 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   logOut: async () => {
     await signOut(auth)
-    set({ profile: null, pet: defaultPet(), inventory: defaultInventory() })
+    set({ profile: null, pet: defaultPet(), inventory: defaultInventory(), achievements: [] })
   },
 
   loadUserData: async (uid) => {
     set({ loading: true })
-    const [petSnap, invSnap] = await Promise.all([
+    const [petSnap, invSnap, achSnap] = await Promise.all([
       getDoc(doc(db, paths.pet(uid))),
       getDoc(doc(db, paths.inventory(uid))),
+      getDoc(doc(db, paths.achievements(uid))),
     ])
 
-    const pet = petSnap.exists() ? ({ ...defaultPet(), ...petSnap.data() } as Pet) : defaultPet()
+    const stored = petSnap.exists() ? ({ ...defaultPet(), ...petSnap.data() } as Pet) : defaultPet()
     const inventory = invSnap.exists()
       ? ((invSnap.data().items as InventoryItem[]) ?? defaultInventory())
       : defaultInventory()
+    const unlockedAt = achSnap.exists()
+      ? ((achSnap.data().unlockedAt as Record<string, number>) ?? {})
+      : {}
+
+    // Catch the pet up on everything that happened while the app was closed.
+    const { pet, report } = applyDecay(stored)
+    const { achievements } = evaluateAchievements(pet, unlockedAt)
+
+    set({ pet, inventory, achievements, unlockedAt, awayReport: report, loading: false })
 
     if (!petSnap.exists()) await setDoc(doc(db, paths.pet(uid)), pet)
+    else if (report) await setDoc(doc(db, paths.pet(uid)), pet)
     if (!invSnap.exists()) await setDoc(doc(db, paths.inventory(uid)), { items: inventory })
 
-    set({ pet, inventory, loading: false })
+    if (report?.died) {
+      get().pushToast(`${pet.name} จากไปแล้ว…`, 'danger')
+    } else if (report?.becameSick) {
+      get().pushToast(`${pet.name} ไม่สบาย ต้องการยาด่วน`, 'warning')
+    }
   },
 
   persistPet: async (pet) => {
     set({ pet })
+    const { unlockedAt } = get()
+    const { achievements, newlyUnlocked } = evaluateAchievements(pet, unlockedAt)
+
+    if (newlyUnlocked.length > 0) {
+      const nextUnlocked = { ...unlockedAt }
+      for (const achievement of newlyUnlocked) {
+        nextUnlocked[achievement.id] = achievement.unlockedAt ?? Date.now()
+      }
+      set({ achievements, unlockedAt: nextUnlocked })
+      set((state) => ({
+        celebrations: [
+          ...state.celebrations,
+          ...newlyUnlocked.map((achievement): Celebration => ({
+            kind: 'achievement',
+            title: 'ปลดล็อกความสำเร็จ',
+            detail: `${achievement.name} — ${achievement.description}`,
+            emoji: achievement.iconEmoji,
+          })),
+        ],
+      }))
+    } else {
+      set({ achievements })
+    }
+
     const uid = get().profile?.uid
-    if (uid) await setDoc(doc(db, paths.pet(uid)), pet)
+    if (!uid) return
+    await setDoc(doc(db, paths.pet(uid)), pet)
+    if (newlyUnlocked.length > 0) {
+      await setDoc(doc(db, paths.achievements(uid)), { unlockedAt: get().unlockedAt })
+    }
   },
 
   persistInventory: async (items) => {
     set({ inventory: items })
     const uid = get().profile?.uid
     if (uid) await setDoc(doc(db, paths.inventory(uid)), { items })
+  },
+
+  /** Keeps stats moving while the tab stays open, so the pet feels alive. */
+  tickDecay: () => {
+    const { pet } = get()
+    if (!pet.isAlive) return
+    const { pet: next, report } = applyDecay(pet)
+    if (!report) return
+    set({ pet: next })
+    if (report.died) {
+      get().pushToast(`${pet.name} จากไปแล้ว…`, 'danger')
+      void get().persistPet(next)
+    } else if (report.becameSick) {
+      get().pushToast(`${pet.name} เริ่มไม่สบายแล้ว`, 'warning')
+    }
+  },
+
+  completeOnboarding: async (name, species) => {
+    const profile = get().profile
+    const pet = defaultPet({ name: name.trim() || 'Sproutly', species })
+    await get().persistPet(pet)
+    if (profile) {
+      await setDoc(doc(db, paths.user(profile.uid)), { onboarded: true }, { merge: true })
+      set({ profile: { ...profile, onboarded: true } })
+    }
+    get().pushToast(`ยินดีต้อนรับ ${pet.name}!`, 'success')
+  },
+
+  revivePet: async (name, species) => {
+    const fresh = hatchNewPet(get().pet, name.trim() || 'Sproutly', species)
+    await get().persistPet(fresh)
+    await get().persistInventory(defaultInventory())
+    set({ awayReport: null })
+    get().pushToast(`${fresh.name} ฟักออกมาแล้ว รุ่นที่ ${fresh.generation}`, 'success')
   },
 
   setTargetMinutes: (minutes) => {
@@ -185,7 +307,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   endFocus: async (completed) => {
-    const { targetMinutes, remainingSeconds, selectedTag, pet, leftTabDuringSession, profile } = get()
+    const { targetMinutes, remainingSeconds, selectedTag, pet, leftTabDuringSession, profile } =
+      get()
 
     const elapsedMinutes = completed
       ? targetMinutes
@@ -200,49 +323,84 @@ export const useAppStore = create<AppState>((set, get) => ({
       ? 'web_timer_interrupted'
       : 'web_timer_verified'
 
-    const { session, pet: updatedPet } = completeFocusSession(
-      pet,
-      targetMinutes,
-      elapsedMinutes,
-      selectedTag,
-      source,
-    )
+    const outcome = completeFocusSession(pet, targetMinutes, elapsedMinutes, selectedTag, source)
 
-    // Grant the reward item, matching the Android reward roll.
-    let inventory = get().inventory
-    if (session.itemRewardName) {
-      const rewardId = itemIdForRewardName(session.itemRewardName)
-      inventory = inventory.map((item) =>
-        item.id === rewardId ? { ...item, quantity: item.quantity + 1 } : item,
-      )
-      await get().persistInventory(inventory)
+    if (outcome.session.itemRewardName) {
+      const rewardId = itemIdForRewardName(outcome.session.itemRewardName)
+      await get().persistInventory(grantItem(get().inventory, rewardId))
     }
 
-    await get().persistPet(updatedPet)
-    set({ celebration: session })
+    await get().persistPet(outcome.pet)
 
-    if (profile) await logSession(profile.uid, session)
+    const queued: Celebration[] = [
+      {
+        kind: 'session',
+        session: outcome.session,
+        title: outcome.session.completed ? 'สำเร็จแล้ว!' : 'จบเซสชัน',
+        detail: `ปลอดหน้าจอไป ${outcome.session.actualMinutes} นาที`,
+        emoji: outcome.session.completed ? '🎉' : '👍',
+      },
+    ]
+    if (outcome.leveledUp) {
+      queued.push({
+        kind: 'levelUp',
+        title: 'เลเวลอัป!',
+        detail: `${outcome.pet.name} ขึ้นเป็นเลเวล ${outcome.pet.level} แล้ว`,
+        emoji: '⬆️',
+      })
+    }
+    if (outcome.evolved) {
+      queued.push({
+        kind: 'evolution',
+        title: 'วิวัฒนาการ!',
+        detail: `${outcome.pet.name} เปลี่ยนร่างเป็นขั้นใหม่แล้ว`,
+        emoji: '🌟',
+      })
+    }
+    set((state) => ({ celebrations: [...state.celebrations, ...queued] }))
+
+    // Research data is written last and independently of the game outcome, so a
+    // game-side failure can never cost us the participant's recorded session.
+    if (profile) await logSession(profile.uid, outcome.session)
   },
-
-  dismissCelebration: () => set({ celebration: null }),
 
   feed: async (item) => {
     const updated = feedPet(get().pet, item)
-    if (!updated) return
+    if (!updated) {
+      get().pushToast('ให้อาหารไม่ได้ตอนนี้', 'warning')
+      return
+    }
     await get().persistInventory(
-      get().inventory.map((i) => (i.id === item.id ? { ...i, quantity: i.quantity - 1 } : i)),
+      get()
+        .inventory.map((i) => (i.id === item.id ? { ...i, quantity: i.quantity - 1 } : i))
+        .filter((i) => i.quantity > 0),
     )
     await get().persistPet(updated)
+    get().pushToast(`${updated.name} กิน${item.name}แล้ว`, 'success')
   },
 
   pat: async () => {
-    await get().persistPet(playWithPet(get().pet))
+    const updated = playWithPet(get().pet)
+    if (!updated) return
+    await get().persistPet(updated)
+  },
+
+  purchase: async (itemId) => {
+    const result = buyItem(get().pet, get().inventory, itemId)
+    if (!result) {
+      get().pushToast('เหรียญไม่พอ', 'warning')
+      return
+    }
+    await get().persistInventory(result.inventory)
+    await get().persistPet(result.pet)
+    get().pushToast('ซื้อสำเร็จ', 'success')
   },
 
   renamePet: async (name) => {
     const trimmed = name.trim()
     if (!trimmed) return
     await get().persistPet({ ...get().pet, name: trimmed })
+    get().pushToast('เปลี่ยนชื่อแล้ว', 'success')
   },
 
   setParticipantId: async (id) => {
@@ -255,7 +413,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       { merge: true },
     )
     set({ profile: { ...profile, participantId } })
+    get().pushToast('บันทึกรหัสผู้เข้าร่วมแล้ว', 'success')
   },
-}))
 
-export { GoogleAuthProvider }
+  pushToast: (message, tone = 'info') => {
+    const id = ++toastSeq
+    set((state) => ({ toasts: [...state.toasts, { id, message, tone }] }))
+    window.setTimeout(() => get().dismissToast(id), 3500)
+  },
+
+  dismissToast: (id) =>
+    set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })),
+
+  dismissCelebration: () => set((state) => ({ celebrations: state.celebrations.slice(1) })),
+
+  dismissAwayReport: () => set({ awayReport: null }),
+}))
