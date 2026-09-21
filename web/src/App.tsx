@@ -18,16 +18,17 @@ import { Shop } from './pages/Shop'
 import { Stats } from './pages/Stats'
 import { Tree } from './pages/Tree'
 import { HAPTIC, accentAt, haptic, readableOn } from './lib/design'
+import { hasPendingEvolution } from './lib/evolution'
 import { moodOf } from './lib/gameLogic'
 import { useAppStore } from './store/useAppStore'
 
 const NAV = [
   { to: '/', label: 'เพื่อน', icon: '🌱' },
   { to: '/focus', label: 'โฟกัส', icon: '🌙' },
+  { to: '/tree', label: 'ต้นไม้', icon: '🌳' },
   { to: '/shop', label: 'ร้าน', icon: '🛒' },
   { to: '/stats', label: 'สถิติ', icon: '📊' },
   { to: '/inventory', label: 'กระเป๋า', icon: '🎒' },
-  { to: '/settings', label: 'ตั้งค่า', icon: '⚙️' },
 ]
 
 export default function App() {
@@ -94,34 +95,50 @@ export default function App() {
 
   const mood = moodOf(pet)
   const needsAttention = mood === 'SICK' || mood === 'DYING' || mood === 'HUNGRY'
+  const canEvolve = hasPendingEvolution(pet)
 
   return (
     <>
       <MeshBackdrop />
       <div className="relative z-10 mx-auto flex min-h-screen max-w-lg flex-col">
-        <header className="flex items-center justify-between px-4 pt-5 pb-3">
+        {/* Settings moved out of the tab bar and into the header so the tree
+            could take a tab. Seven tabs do not fit a 360px phone without the
+            Thai labels wrapping, and a gear in the corner is where people look
+            for settings anyway. */}
+        <header className="flex items-center justify-between gap-2 px-4 pt-5 pb-3">
           <h1
             className="text-rainbow text-2xl font-black tracking-tighter uppercase"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             Focus Pet
           </h1>
-          {profile.participantId ? (
-            <span
-              className="rounded-full border-2 px-3 py-1 text-[10px] font-black tracking-widest uppercase"
-              style={{ borderColor: '#00F5D4', color: '#00F5D4' }}
-            >
-              {profile.participantId}
-            </span>
-          ) : (
+          <div className="flex items-center gap-2">
+            {profile.participantId ? (
+              <span
+                className="rounded-full border-2 px-3 py-1 text-[10px] font-black tracking-widest uppercase"
+                style={{ borderColor: '#00F5D4', color: '#00F5D4' }}
+              >
+                {profile.participantId}
+              </span>
+            ) : (
+              <NavLink
+                to="/settings"
+                className="animate-wiggle rounded-full border-2 px-3 py-1 text-[10px] font-black uppercase"
+                style={{ borderColor: '#FFE600', color: '#FFE600' }}
+              >
+                ใส่รหัส
+              </NavLink>
+            )}
             <NavLink
               to="/settings"
-              className="animate-wiggle rounded-full border-2 px-3 py-1 text-[10px] font-black uppercase"
-              style={{ borderColor: '#FFE600', color: '#FFE600' }}
+              aria-label="ตั้งค่า"
+              onClick={() => haptic(HAPTIC.tap)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border-2 text-lg transition-transform active:scale-90"
+              style={{ borderColor: '#A1A1AA' }}
             >
-              ใส่รหัสผู้เข้าร่วม
+              <span aria-hidden>⚙️</span>
             </NavLink>
-          )}
+          </div>
         </header>
 
         <main className="flex-1 px-4 pb-32">
@@ -130,7 +147,7 @@ export default function App() {
             <Route path="/focus" element={<Focus />} />
             <Route path="/shop" element={<Shop />} />
             <Route path="/tree" element={<Tree />} />
-          <Route path="/stats" element={<Stats />} />
+            <Route path="/stats" element={<Stats />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -176,11 +193,12 @@ export default function App() {
                       >
                         {item.label}
                       </span>
-                      {item.to === '/' && needsAttention && (
+                      {((item.to === '/' && needsAttention) ||
+                        (item.to === '/tree' && canEvolve)) && (
                         <span
                           aria-hidden
                           className="animate-pulse-glow absolute top-1.5 right-1/4 h-2.5 w-2.5 rounded-full"
-                          style={{ background: '#FF6B35' }}
+                          style={{ background: item.to === '/tree' ? '#FFE600' : '#FF6B35' }}
                         />
                       )}
                     </>

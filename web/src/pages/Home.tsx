@@ -114,13 +114,30 @@ export function Home() {
           >
             ▸ แตะเพื่อเล่นด้วย ◂
           </p>
-          <Link to="/tree" className="relative z-10 mt-3 block">
+          <Link to="/tree" className="relative z-10 mt-4 block px-4">
             <div
-              className="mx-auto w-fit rounded-full border-2 px-4 py-1.5 text-[11px] font-black tracking-widest uppercase transition-transform active:scale-95"
-              style={{ borderColor: node.visual.palette[1], color: node.visual.palette[1] }}
+              className="flex items-center justify-between gap-2 rounded-2xl border-4 px-4 py-3 transition-transform active:scale-95"
+              style={{
+                borderColor: node.visual.palette[1],
+                background: `${node.visual.palette[0]}22`,
+                boxShadow: `4px 4px 0 ${node.visual.palette[0]}`,
+              }}
             >
-              🌳 {node.name}
-              {toNextBranch !== null && toNextBranch > 0 && ` · อีก ${toNextBranch} เลเวล`}
+              <span className="text-left">
+                <span
+                  className="block text-sm font-black uppercase"
+                  style={{ fontFamily: 'var(--font-display)', color: node.visual.palette[1] }}
+                >
+                  🌳 ต้นไม้วิวัฒนาการ
+                </span>
+                <span className="block text-[10px] font-bold text-white/60">
+                  {node.name}
+                  {toNextBranch !== null && toNextBranch > 0 && ` · อีก ${toNextBranch} เลเวล`}
+                </span>
+              </span>
+              <span aria-hidden className="text-xl" style={{ color: node.visual.palette[1] }}>
+                ›
+              </span>
             </div>
           </Link>
         </div>
