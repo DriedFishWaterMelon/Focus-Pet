@@ -10,6 +10,7 @@ import {
   levelsUntilNextChoice,
   migrateEvolutionPath,
   nodeOf,
+  pathTo,
   pendingChoice,
   treeByTier,
 } from './evolution'
@@ -210,6 +211,35 @@ describe('balance', () => {
         'children',
         'visual',
       ])
+    }
+  })
+})
+
+describe('pathTo', () => {
+  it('returns just the root for the root', () => {
+    expect(pathTo(ROOT_NODE).map((n) => n.id)).toEqual([ROOT_NODE])
+  })
+
+  it('traces the full chain to a final form', () => {
+    expect(pathTo('void').map((n) => n.id)).toEqual([ROOT_NODE, 'moon', 'crystal', 'void'])
+    expect(pathTo('radiant').map((n) => n.id)).toEqual([ROOT_NODE, 'sun', 'blossom', 'radiant'])
+  })
+
+  it('returns a chain whose length matches the tier for every form', () => {
+    for (const node of Object.values(EVOLUTION_TREE)) {
+      const chain = pathTo(node.id)
+      expect(chain.length, `${node.id} chain length`).toBe(node.tier + 1)
+      expect(chain[chain.length - 1].id).toBe(node.id)
+      expect(chain[0].id).toBe(ROOT_NODE)
+    }
+  })
+
+  it('produces a chain where each step is a child of the last', () => {
+    for (const node of Object.values(EVOLUTION_TREE)) {
+      const chain = pathTo(node.id)
+      for (let i = 1; i < chain.length; i++) {
+        expect(chain[i - 1].children).toContain(chain[i].id)
+      }
     }
   })
 })

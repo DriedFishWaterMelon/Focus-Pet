@@ -214,28 +214,48 @@ export function PetCanvas({
   )
 }
 
-/** Small standalone portrait used by the tree and the choice modal. */
+/**
+ * Standalone portrait used by the tree grid and the preview.
+ *
+ * `still` exists for the grid: fifteen portraits each animating an aura, a
+ * crown and five drifting particles is a lot of simultaneous compositing on the
+ * mid-range phones this study runs on, and a wall of motion is hard to read
+ * anyway. The grid renders still; the preview animates, because each form's
+ * movement is part of what distinguishes it.
+ */
 export function PetPortrait({
   visual,
   tier,
   size = 96,
   dim = false,
+  still = false,
 }: {
   visual: PetVisual
   tier: number
   size?: number
   dim?: boolean
+  still?: boolean
 }) {
   const scale = TIER_SCALE[Math.min(tier, TIER_SCALE.length - 1)]
+  const decorated = !dim && !still
 
   return (
     <svg
       viewBox="0 0 200 200"
       aria-hidden
-      style={{ width: size, height: size, opacity: dim ? 0.3 : 1, filter: dim ? 'grayscale(1)' : undefined }}
+      style={{
+        width: size,
+        height: size,
+        opacity: dim ? 0.3 : 1,
+        filter: dim ? 'grayscale(1)' : undefined,
+      }}
     >
       {!dim && <Aura visual={visual} alive focus={false} />}
-      <g transform={`translate(100 105) scale(${scale}) translate(-100 -105)`}>
+      <g
+        transform={`translate(100 105) scale(${scale}) translate(-100 -105)`}
+        className={still ? undefined : idleClass(visual)}
+        style={{ transformOrigin: '100px 130px' }}
+      >
         <Crown visual={visual} />
         <Body visual={visual} />
         <circle cx="86" cy="78" r="7" fill="#0D0D1A" />
@@ -244,7 +264,7 @@ export function PetPortrait({
         <circle cx="116.5" cy="75.5" r="2.4" fill="#FFFFFF" />
         <path d="M91 95 q9 8 18 0" stroke="#0D0D1A" strokeWidth="4" fill="none" strokeLinecap="round" />
       </g>
-      {!dim && <Particles visual={visual} alive />}
+      {decorated && <Particles visual={visual} alive />}
     </svg>
   )
 }

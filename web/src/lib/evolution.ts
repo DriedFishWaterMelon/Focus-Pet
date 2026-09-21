@@ -372,6 +372,25 @@ export function migrateEvolutionPath(level: number): NodeId[] {
   return path
 }
 
+/**
+ * The chain of forms leading from the root to `id`, inclusive.
+ *
+ * Used by the preview to show how a form is reached — "เมล็ด → จันทรา → ผลึก →
+ * ปริซึม" tells a player what they would have to commit to far better than a
+ * required level does.
+ */
+export function pathTo(id: NodeId): EvolutionNode[] {
+  const walk = (from: NodeId, trail: NodeId[]): NodeId[] | null => {
+    if (from === id) return [...trail, from]
+    for (const child of nodeOf(from).children) {
+      const found = walk(child as NodeId, [...trail, from])
+      if (found) return found
+    }
+    return null
+  }
+  return (walk(ROOT_NODE, []) ?? [ROOT_NODE]).map((n) => nodeOf(n))
+}
+
 /** Every node, grouped by tier, for rendering the tree. */
 export function treeByTier(): EvolutionNode[][] {
   const tiers: EvolutionNode[][] = [[], [], [], []]

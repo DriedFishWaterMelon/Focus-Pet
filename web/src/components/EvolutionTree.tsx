@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Burst, ScreenFlash } from './Burst'
 import { BackgroundWord, FloatingShapes } from './Decor'
+import { EvolutionPreview } from './EvolutionPreview'
 import { PetPortrait } from './PetCanvas'
 import { Button, Card, Modal } from './ui'
 import { HAPTIC, accentAt, clashAt, haptic } from '../lib/design'
@@ -27,10 +28,17 @@ import { useAppStore } from '../store/useAppStore'
  * a player who wants the other branch has a reason to raise a second pet.
  */
 export function EvolutionTree({ pet }: { pet: Pet }) {
+  const pickEvolution = useAppStore((s) => s.pickEvolution)
+  const [previewing, setPreviewing] = useState<NodeId | null>(null)
+
   const tiers = treeByTier()
   const active = currentNode(pet)
   const toNext = levelsUntilNextChoice(pet)
   const choice = pendingChoice(pet)
+
+  // The preview only offers "choose this" for a form that is actually on the
+  // table right now, so it can never be used to skip a tier.
+  const canChooseNow = (id: NodeId) => Boolean(choice?.some((option) => option.id === id))
 
   return (
     <div className="space-y-5">
@@ -44,7 +52,11 @@ export function EvolutionTree({ pet }: { pet: Pet }) {
       >
         <BackgroundWord word="GROW" className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" accent={1} />
         <FloatingShapes count={5} seed={17} />
-        <div className="relative z-10 flex flex-col items-center">
+        <button
+          type="button"
+          onClick={() => setPreviewing(active.id as NodeId)}
+          className="relative z-10 flex w-full flex-col items-center transition-transform active:scale-95"
+        >
           <PetPortrait visual={active.visual} tier={active.tier} size={110} />
           <p
             className="ts-1 mt-2 text-2xl font-black uppercase"
@@ -72,7 +84,10 @@ export function EvolutionTree({ pet }: { pet: Pet }) {
               อีก {toNext} เลเวลถึงทางแยกถัดไป
             </p>
           )}
-        </div>
+          <span className="mt-2 text-[10px] font-black tracking-widest text-white/40 uppercase">
+            ▸ แตะเพื่อดูรายละเอียด ◂
+          </span>
+        </button>
       </div>
 
       {tiers.map((nodes, tier) => (
@@ -105,6 +120,7 @@ export function EvolutionTree({ pet }: { pet: Pet }) {
                 index={i}
                 wide={tier === 0}
                 isCurrent={node.id === active.id}
+                onOpen={() => setPreviewing(node.id as NodeId)}
               />
             ))}
           </div>
@@ -112,10 +128,26 @@ export function EvolutionTree({ pet }: { pet: Pet }) {
       ))}
 
       <p className="pb-2 text-center text-[11px] leading-relaxed text-white/45">
-        เส้นทางที่ไม่ได้เลือกจะปิดถาวรสำหรับสัตว์เลี้ยงตัวนี้
+        แตะร่างใดก็ได้เพื่อดูรายละเอียดและลองสวมดู
         <br />
-        อยากลองอีกสายต้องเลี้ยงตัวใหม่
+        เส้นทางที่ไม่ได้เลือกจะปิดถาวรสำหรับสัตว์เลี้ยงตัวนี้
       </p>
+
+      {previewing && (
+        <EvolutionPreview
+          node={nodeOf(previewing)}
+          pet={pet}
+          onClose={() => setPreviewing(null)}
+          onChoose={
+            canChooseNow(previewing)
+              ? async (id) => {
+                  await pickEvolution(id)
+                  setPreviewing(null)
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   )
 }
@@ -126,12 +158,14 @@ function TreeNode({
   index,
   wide,
   isCurrent,
+  onOpen,
 }: {
   node: EvolutionNode
   pet: Pet
   index: number
   wide: boolean
   isCurrent: boolean
+  onOpen: () => void
 }) {
   const taken = isOnPath(pet, node.id)
   const reachable = isReachable(pet, node.id)
@@ -139,8 +173,14 @@ function TreeNode({
   const color = node.visual.palette[0]
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border-4 p-2.5 text-center transition-all duration-300 ${
+    <button
+      type="button"
+      onClick={() => {
+        haptic(HAPTIC.tap)
+        onOpen()
+      }}
+      aria-label={`ดูรายละเอียด ${node.name}`}
+      className={`relative overflow-hidden rounded-2xl border-4 p-2.5 text-center transition-all duration-300 hover:-translate-y-0.5 active:scale-95 ${
         wide ? 'w-full' : 'flex-1 basis-[calc(50%-0.32rem)]'
       } ${isCurrent ? 'scale-[1.03]' : ''}`}
       style={{
@@ -150,7 +190,7 @@ function TreeNode({
       }}
     >
       <div className="flex flex-col items-center">
-        <PetPortrait visual={node.visual} tier={node.tier} size={64} dim={closed} />
+        <PetPortrait visual={node.visual} tier={node.tier} size={64} dim={closed} still />
         <p
           className="mt-1 text-[11px] leading-tight font-black uppercase"
           style={{ fontFamily: 'var(--font-display)', color: closed ? '#71717A' : color }}
@@ -167,7 +207,7 @@ function TreeNode({
           <p className="text-[9px] font-bold text-white/40">ยังไปถึงได้</p>
         )}
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -186,6 +226,7 @@ export function EvolutionChoiceModal() {
   const open = useAppStore((s) => s.evolutionPromptOpen)
   const defer = useAppStore((s) => s.deferEvolutionPrompt)
   const [selected, setSelected] = useState<NodeId | null>(null)
+  const [inspecting, setInspecting] = useState<NodeId | null>(null)
   const [burst, setBurst] = useState(0)
   const [flash, setFlash] = useState(0)
   const [evolving, setEvolving] = useState(false)
@@ -267,11 +308,24 @@ export function EvolutionChoiceModal() {
         </div>
 
         {preview && (
-          <p className="anim-fade-up mt-3 rounded-xl border-2 border-dashed px-3 py-2 text-[12px] leading-relaxed text-white/85"
-            style={{ borderColor: preview.visual.palette[1] }}
-          >
-            {preview.description}
-          </p>
+          <>
+            <p
+              className="anim-fade-up mt-3 rounded-xl border-2 border-dashed px-3 py-2 text-[12px] leading-relaxed text-white/85"
+              style={{ borderColor: preview.visual.palette[1] }}
+            >
+              {preview.description}
+            </p>
+            <div className="mt-2">
+              <Button
+                accent={1}
+                variant="ghost"
+                className="w-full"
+                onClick={() => setInspecting(selected)}
+              >
+                🔍 ดูเต็ม ๆ และลองสวม
+              </Button>
+            </div>
+          </>
         )}
 
         <div className="mt-5">
@@ -293,6 +347,18 @@ export function EvolutionChoiceModal() {
         <p className="mt-2 text-center text-[10px] text-white/45">
           อีกสายจะถูกปิดถาวรสำหรับสัตว์เลี้ยงตัวนี้
         </p>
+
+        {inspecting && (
+          <EvolutionPreview
+            node={nodeOf(inspecting)}
+            pet={pet}
+            onClose={() => setInspecting(null)}
+            onChoose={(id) => {
+              setSelected(id)
+              setInspecting(null)
+            }}
+          />
+        )}
 
         {/* A permanent choice should never be forced on someone mid-session.
             Postponing keeps the pet at its current form with no penalty. */}
