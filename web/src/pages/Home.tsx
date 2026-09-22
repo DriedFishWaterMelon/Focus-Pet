@@ -5,7 +5,7 @@ import { GrowthPreviewButton } from '../components/GrowthPreview'
 import { PetCanvas } from '../components/PetCanvas'
 import { AnimatedNumber, Button, Card, SectionTitle, StatBar, StatTile } from '../components/ui'
 import { FloatingGain } from '../components/Burst'
-import { HAPTIC, accentAt, haptic } from '../lib/design'
+import { HAPTIC, accentTextAt, haptic } from '../lib/design'
 import {
   SICK_THRESHOLD,
   expProgress,
@@ -169,7 +169,7 @@ export function Home() {
 
       <p
         className="pb-2 text-center text-xs font-bold tracking-widest uppercase"
-        style={{ color: accentAt(3) }}
+        style={{ color: accentTextAt(3) }}
       >
         สะสมแล้ว <AnimatedNumber value={pet.totalFocusMinutes} /> นาที
       </p>

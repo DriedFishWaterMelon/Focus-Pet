@@ -1,6 +1,6 @@
 import { BackgroundWord, FloatingShapes } from '../components/Decor'
 import { AnimatedNumber, Button, Card, CardTitle, SectionTitle } from '../components/ui'
-import { HAPTIC, accentAt, clashAt, readableOn, skewAt } from '../lib/design'
+import { HAPTIC, accentAt, clashAt, readableOn, skewAt, textSafe } from '../lib/design'
 import { SHOP_CATALOG } from '../lib/gameLogic'
 import { useAppStore } from '../store/useAppStore'
 
@@ -86,7 +86,7 @@ export function Shop() {
                   </div>
                   <p
                     className="mt-1 text-[10px] font-black tracking-widest uppercase"
-                    style={{ color: clashAt(i) }}
+                    style={{ color: textSafe(clashAt(i)) }}
                   >
                     {CATEGORY_LABELS[item.category]}
                   </p>

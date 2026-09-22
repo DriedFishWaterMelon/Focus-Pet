@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { BackgroundWord, FloatingShapes } from '../components/Decor'
 import { PetCanvas } from '../components/PetCanvas'
 import { Button, Card, Chip, SectionTitle } from '../components/ui'
-import { HAPTIC, accentAt } from '../lib/design'
+import { HAPTIC, accentTextAt } from '../lib/design'
 import {
   FREE_MINUTES_PER_POINT,
   freePointsFor,
@@ -300,7 +300,7 @@ export function Focus() {
       {!isFocusActive && (
         <p
           className="pb-2 text-center text-xs leading-relaxed font-bold"
-          style={{ color: accentAt(4) }}
+          style={{ color: accentTextAt(4) }}
         >
           วางมือถือลงแล้วปล่อยหน้านี้เปิดไว้
           <br />

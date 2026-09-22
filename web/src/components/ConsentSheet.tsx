@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Button, Card } from './ui'
-import { HAPTIC, accentAt, clashAt, haptic } from '../lib/design'
+import { HAPTIC, accentAt, accentTextAt, clashAt, haptic, textSafe } from '../lib/design'
 import {
   CONSENT_CHECKS,
   CONSENT_SHEET,
@@ -62,7 +62,7 @@ export function ConsentSheet({
     <Card accent={4} className="p-5">
       <h2
         className="ts-2 text-3xl font-black uppercase"
-        style={{ fontFamily: 'var(--font-display)', color: accentAt(4) }}
+        style={{ fontFamily: 'var(--font-display)', color: accentTextAt(4) }}
       >
         หนังสือยินยอม
       </h2>
@@ -104,14 +104,14 @@ export function ConsentSheet({
           <section key={section.heading}>
             <h3
               className="text-base leading-snug font-black uppercase"
-              style={{ fontFamily: 'var(--font-display)', color: accentAt(i) }}
+              style={{ fontFamily: 'var(--font-display)', color: accentTextAt(i) }}
             >
               {i + 1}. {section.heading}
             </h3>
             <ul className="mt-2 space-y-2.5">
               {section.body.map((line, j) => (
                 <li key={j} className="flex gap-2.5 text-[15px] leading-[1.75] text-white/90">
-                  <span aria-hidden className="shrink-0" style={{ color: clashAt(i) }}>
+                  <span aria-hidden className="shrink-0" style={{ color: textSafe(clashAt(i)) }}>
                     ▸
                   </span>
                   <span>{line}</span>
@@ -124,13 +124,13 @@ export function ConsentSheet({
         <section>
           <h3
             className="text-base font-black uppercase"
-            style={{ fontFamily: 'var(--font-display)', color: accentAt(3) }}
+            style={{ fontFamily: 'var(--font-display)', color: accentTextAt(3) }}
           >
             {CONSENT_SHEET.length + 1}. ติดต่อทีมวิจัย
           </h3>
           <p className="mt-2 text-[15px] leading-[1.75] text-white/90">
             หากมีคำถาม ต้องการถอนตัว หรือขอให้ลบข้อมูล ติดต่อได้ที่{' '}
-            <span className="font-bold" style={{ color: accentAt(3) }}>
+            <span className="font-bold" style={{ color: accentTextAt(3) }}>
               {RESEARCH_CONTACT_EMAIL}
             </span>
           </p>
@@ -285,7 +285,7 @@ export function ParticipantIdIssued({
     <Card accent={1} className="p-5">
       <h2
         className="ts-2 text-3xl font-black uppercase"
-        style={{ fontFamily: 'var(--font-display)', color: accentAt(1) }}
+        style={{ fontFamily: 'var(--font-display)', color: accentTextAt(1) }}
       >
         รหัสของคุณ
       </h2>
@@ -303,7 +303,7 @@ export function ParticipantIdIssued({
         ) : code ? (
           <p
             className="ts-1 text-4xl font-black tracking-[0.15em] tabular-nums"
-            style={{ fontFamily: 'var(--font-display)', color: accentAt(2) }}
+            style={{ fontFamily: 'var(--font-display)', color: accentTextAt(2) }}
           >
             {code}
           </p>
@@ -325,7 +325,7 @@ export function ParticipantIdIssued({
 
       <p
         className="mt-4 rounded-xl border-2 border-dashed px-3 py-2 text-[11px] leading-relaxed font-bold"
-        style={{ borderColor: accentAt(3), color: accentAt(3) }}
+        style={{ borderColor: accentAt(3), color: accentTextAt(3) }}
       >
         📝 จดรหัสนี้ไว้ หรือกดคัดลอก แล้วนำไปกรอกในแบบสอบถามของงานวิจัย
         ดูรหัสย้อนหลังได้ที่หน้าตั้งค่าเสมอ

@@ -19,6 +19,31 @@ export function accentAt(index: number): Accent {
 }
 
 /**
+ * Readable-on-dark substitutes, used when an accent becomes text.
+ *
+ * Measured against the #0D0D1A background, four of the five accents clear WCAG
+ * AA comfortably — magenta 6.6:1, orange 6.8:1, cyan 13.8:1, yellow 15.2:1 —
+ * but the vivid purple lands at 3.39:1, which is below the 4.5:1 floor for body
+ * text and was reported as hard to read. It keeps its saturation on borders,
+ * fills and shadows, where contrast against text is not at stake, and hands
+ * over to a lighter violet (7.1:1) wherever it has to be read.
+ */
+const TEXT_SAFE: Partial<Record<Accent, string>> = {
+  '#7B2FFF': '#A78BFA',
+}
+
+/** The accent for `index`, swapped for a legible variant if it is going on text. */
+export function accentTextAt(index: number): string {
+  const base = accentAt(index)
+  return TEXT_SAFE[base] ?? base
+}
+
+/** Same substitution for a colour that did not come from the rotation. */
+export function textSafe(color: string): string {
+  return TEXT_SAFE[color.toUpperCase() as Accent] ?? color
+}
+
+/**
  * A border colour that deliberately clashes with `index`'s own accent.
  * Offsetting by two rather than one keeps neighbours from pairing up into
  * the same two-colour combination down a list.
@@ -27,9 +52,30 @@ export function clashAt(index: number): Accent {
   return accentAt(index + 2)
 }
 
-/** Yellow and cyan are too bright for white text; they take the void instead. */
+const srgb = (value: number) =>
+  value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4)
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+  return 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b)
+}
+
+function contrastRatio(a: string, b: string): number {
+  const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/**
+ * Foreground for text sitting on a solid accent.
+ *
+ * Computed rather than listed. The previous version put white on everything
+ * except yellow and cyan, which left white text on magenta at 2.9:1 and on
+ * orange at 2.8:1 — both far below the 4.5:1 floor, and both used on button
+ * labels. Measuring both candidates and taking the better one puts every accent
+ * above the floor, and a future accent gets the right answer for free.
+ */
 export function readableOn(color: string): string {
-  return ['#FFE600', '#00F5D4'].includes(color.toUpperCase()) ? VOID : '#FFFFFF'
+  return contrastRatio(VOID, color) >= contrastRatio('#FFFFFF', color) ? VOID : '#FFFFFF'
 }
 
 /** Inline CSS variables consumed by the .shadow-multi / .glow utilities. */

@@ -1,17 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { PatternLayer } from './Decor'
-import {
-  ACCENTS,
-  type HapticPattern,
-  HAPTIC,
-  accentAt,
-  clashAt,
-  glowVars,
-  haptic,
-  multiShadow,
-  readableOn,
-} from '../lib/design'
+import { ACCENTS, HAPTIC, accentAt, accentTextAt, clashAt, glowVars, haptic, multiShadow, readableOn, type HapticPattern } from '../lib/design'
 
 // Primitives for the Maximalism system. Every component takes an `accent`
 // index rather than a colour, so callers rotate by position and never reach
@@ -65,7 +55,7 @@ export function CardTitle({
   return (
     <h2
       className={`ts-1 text-xl font-black tracking-tight uppercase ${className}`}
-      style={{ fontFamily: 'var(--font-display)', color: accentAt(accent) }}
+      style={{ fontFamily: 'var(--font-display)', color: accentTextAt(accent) }}
     >
       {children}
     </h2>
@@ -392,7 +382,7 @@ export function EmptyState({
       </span>
       <p
         className="ts-1 mt-4 text-2xl font-black uppercase"
-        style={{ fontFamily: 'var(--font-display)', color: accentAt(accent) }}
+        style={{ fontFamily: 'var(--font-display)', color: accentTextAt(accent) }}
       >
         {title}
       </p>

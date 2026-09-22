@@ -4,7 +4,7 @@ import { BackgroundWord, FloatingShapes, Marquee } from './Decor'
 import { PetCanvas } from './PetCanvas'
 import { ConsentSheet } from './ConsentSheet'
 import { Button, Card, Modal, TextInput } from './ui'
-import { HAPTIC, accentAt, clashAt, haptic, readableOn } from '../lib/design'
+import { HAPTIC, accentAt, accentTextAt, clashAt, haptic, readableOn } from '../lib/design'
 import { defaultPet } from '../lib/gameLogic'
 import { SPECIES_INFO } from '../lib/types'
 import type { PetSpecies } from '../lib/types'
@@ -175,7 +175,7 @@ export function Onboarding() {
             <div>
               <h2
                 className="ts-2 text-3xl font-black uppercase"
-                style={{ fontFamily: 'var(--font-display)', color: accentAt(1) }}
+                style={{ fontFamily: 'var(--font-display)', color: accentTextAt(1) }}
               >
                 เลือกสี
               </h2>
@@ -201,7 +201,7 @@ export function Onboarding() {
             <div>
               <h2
                 className="ts-2 text-3xl font-black uppercase"
-                style={{ fontFamily: 'var(--font-display)', color: accentAt(2) }}
+                style={{ fontFamily: 'var(--font-display)', color: accentTextAt(2) }}
               >
                 ตั้งชื่อ
               </h2>
@@ -278,7 +278,7 @@ export function AwayReportModal() {
             <span className="text-xs font-black tracking-widest text-white/75 uppercase">
               {row.label}
             </span>
-            <span className="text-lg font-black" style={{ color: accentAt(row.accent) }}>
+            <span className="text-lg font-black" style={{ color: accentTextAt(row.accent) }}>
               −{Math.round(row.value)}
             </span>
           </div>

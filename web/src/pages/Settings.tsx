@@ -7,7 +7,7 @@ import { RESEARCH_CONTACT_EMAIL } from '../lib/consent'
 import { PUSH_CONFIGURED, disablePush, enablePush, pushState } from '../lib/notifications'
 import type { PushState } from '../lib/notifications'
 import { surveyUrlFor } from '../lib/survey'
-import { HAPTIC, accentAt, haptic } from '../lib/design'
+import { HAPTIC, accentAt, accentTextAt, haptic } from '../lib/design'
 import type { EnrolmentStatus } from '../lib/types'
 import { useAppStore } from '../store/useAppStore'
 
@@ -429,7 +429,7 @@ export function Settings() {
           </p>
           <p className="relative z-10 mt-3 text-sm leading-relaxed text-white/80">
             เว็บนี้จึงวัดได้เฉพาะ{' '}
-            <strong style={{ color: accentAt(3) }}>
+            <strong style={{ color: accentTextAt(3) }}>
               เวลาที่คุณเปิดเซสชันปลอดหน้าจอค้างไว้ในแท็บนี้
             </strong>{' '}
             ถ้าสลับไปแท็บอื่นระบบจะบันทึกว่าถูกขัดจังหวะ
@@ -483,7 +483,7 @@ function CodeRow({ code }: { code: string }) {
       <dd className="flex items-center gap-2">
         <span
           className="text-lg font-black tracking-[0.1em]"
-          style={{ fontFamily: 'var(--font-display)', color: accentAt(1) }}
+          style={{ fontFamily: 'var(--font-display)', color: accentTextAt(1) }}
         >
           {code || 'ยังไม่มี'}
         </span>
@@ -493,7 +493,7 @@ function CodeRow({ code }: { code: string }) {
             onClick={() => void copy()}
             aria-label="คัดลอกรหัส"
             className="rounded-lg border-2 px-2 py-0.5 text-[10px] font-black transition-transform active:scale-90"
-            style={{ borderColor: accentAt(2), color: accentAt(2) }}
+            style={{ borderColor: accentAt(2), color: accentTextAt(2) }}
           >
             {copied ? '✓' : '📋'}
           </button>
@@ -507,7 +507,7 @@ function Row({ label, value, accent }: { label: string; value: string; accent: n
   return (
     <div className="flex items-center justify-between border-b-2 border-dashed border-white/10 pb-2">
       <dt className="text-xs font-black tracking-widest text-white/60 uppercase">{label}</dt>
-      <dd className="text-base font-black" style={{ color: accentAt(accent) }}>
+      <dd className="text-base font-black" style={{ color: accentTextAt(accent) }}>
         {value}
       </dd>
     </div>

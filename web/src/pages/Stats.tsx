@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackgroundWord, FloatingShapes } from '../components/Decor'
 import { Button, Card, EmptyState, SectionTitle, StatTile, TextInput } from '../components/ui'
-import { HAPTIC, accentAt, clashAt, haptic } from '../lib/design'
+import { HAPTIC, accentAt, accentTextAt, clashAt, haptic } from '../lib/design'
 import { surveyUrlFor } from '../lib/survey'
 import {
   downloadCsv,
@@ -122,7 +122,7 @@ export function Stats() {
               บันทึก
             </Button>
           </div>
-          <p className="mt-2 text-[11px] font-bold" style={{ color: accentAt(3) }}>
+          <p className="mt-2 text-[11px] font-bold" style={{ color: accentTextAt(3) }}>
             ข้อมูลนี้จะถูกบันทึกเป็น "กรอกเอง" ในชุดข้อมูลวิจัย
           </p>
         </Card>
@@ -194,7 +194,7 @@ export function Stats() {
                   </div>
                   <span
                     className="w-16 shrink-0 text-right text-xs font-black tabular-nums"
-                    style={{ color: accentAt(i) }}
+                    style={{ color: accentTextAt(i) }}
                   >
                     {Math.floor(day.minutes / 60)}ช {day.minutes % 60}น
                   </span>
@@ -224,7 +224,7 @@ export function Stats() {
                   style={{ borderColor: accentAt(i), background: `${accentAt(i)}14` }}
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-black" style={{ color: accentAt(i) }}>
+                    <p className="text-sm font-black" style={{ color: accentTextAt(i) }}>
                       {s.actualMinutes} นาที · {s.tag}
                     </p>
                     <p className="mt-0.5 text-[10px] text-white/50">

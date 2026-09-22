@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { BackgroundWord, FloatingShapes, PatternLayer } from '../components/Decor'
 import { Button, Card, CardTitle, EmptyState, SectionTitle } from '../components/ui'
-import { HAPTIC, accentAt, clashAt, skewAt } from '../lib/design'
+import { HAPTIC, accentAt, accentTextAt, clashAt, skewAt, textSafe } from '../lib/design'
 import { ACHIEVEMENTS } from '../lib/achievements'
 import { useAppStore } from '../store/useAppStore'
 
@@ -59,14 +59,14 @@ export function Inventory() {
                     <CardTitle accent={i}>{item.name}</CardTitle>
                     <span
                       className="shrink-0 rounded-full border-2 px-2 py-0.5 text-[11px] font-black"
-                      style={{ borderColor: accentAt(i), color: accentAt(i) }}
+                      style={{ borderColor: accentAt(i), color: accentTextAt(i) }}
                     >
                       ×{item.quantity}
                     </span>
                   </div>
                   <p
                     className="mt-1 text-[10px] font-black tracking-widest uppercase"
-                    style={{ color: clashAt(i) }}
+                    style={{ color: textSafe(clashAt(i)) }}
                   >
                     {CATEGORY_LABELS[item.category]}
                   </p>
