@@ -9,7 +9,9 @@ import { create } from 'zustand'
 import { auth, db, googleProvider, paths } from '../lib/firebase'
 import { evaluateAchievements } from '../lib/achievements'
 import {
+  SICK_THRESHOLD,
   applyDecay,
+  applyScreenTimePenalty,
   buyItem,
   completeFocusSession,
   completeFreeSession,
@@ -37,7 +39,7 @@ import { isEnrolled } from '../lib/types'
 import type { SessionMode } from '../lib/types'
 import type {
   Achievement,
-  AwayReport,
+  RestReport,
   InventoryItem,
   Pet,
   PetSpecies,
@@ -71,13 +73,15 @@ interface AppState {
   unlockedAt: Record<string, number>
   loading: boolean
   /** What happened to the pet while the app was closed. Shown once, then cleared. */
-  awayReport: AwayReport | null
+  restReport: RestReport | null
 
   isFocusActive: boolean
   targetMinutes: number
   remainingSeconds: number
+  /** When the running session began. The timer is derived from this, not counted. */
+  sessionStartedAt: number | null
   selectedTag: string
-  leftTabDuringSession: boolean
+  screenOnDuringSession: boolean
   /** Which timer the Focus screen is set to. */
   sessionMode: SessionMode
   /** Seconds counted up so far in free mode. */
@@ -95,6 +99,7 @@ interface AppState {
   persistPet: (pet: Pet) => Promise<void>
   persistInventory: (items: InventoryItem[]) => Promise<void>
   tickDecay: () => void
+  reportScreenTime: (minutes: number) => Promise<void>
 
   completeOnboarding: (name: string, species: PetSpecies) => Promise<void>
   revivePet: (name: string, species: PetSpecies) => Promise<void>
@@ -104,7 +109,7 @@ interface AppState {
   setSelectedTag: (tag: string) => void
   startFocus: () => void
   tickFocus: () => void
-  markLeftTab: () => void
+  markScreenOn: () => void
   endFocus: (completed: boolean) => Promise<void>
   bankFreeSession: (minutes: number, tag: string, source: SessionSource) => Promise<void>
 
@@ -122,7 +127,7 @@ interface AppState {
   pushToast: (message: string, tone?: Toast['tone']) => void
   dismissToast: (id: number) => void
   dismissCelebration: () => void
-  dismissAwayReport: () => void
+  dismissRestReport: () => void
 }
 
 let toastSeq = 0
@@ -137,13 +142,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   achievements: [],
   unlockedAt: {},
   loading: false,
-  awayReport: null,
+  restReport: null,
 
   isFocusActive: false,
   targetMinutes: 25,
   remainingSeconds: 25 * 60,
+  sessionStartedAt: null,
   selectedTag: 'Deep Work',
-  leftTabDuringSession: false,
+  screenOnDuringSession: false,
   sessionMode: 'targeted',
   elapsedSeconds: 0,
 
@@ -203,7 +209,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       inventory: defaultInventory(),
       achievements: [],
       unlockedAt: {},
-      awayReport: null,
+      restReport: null,
     })
   },
 
@@ -224,19 +230,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       : {}
 
     // Catch the pet up on everything that happened while the app was closed.
-    const { pet, report } = applyDecay(stored)
+    // The app was shut, so the whole gap counts as time away from the phone.
+    const { pet, report } = applyDecay(stored, Date.now(), false)
     const { achievements } = evaluateAchievements(pet, unlockedAt)
 
-    set({ pet, inventory, achievements, unlockedAt, awayReport: report, loading: false })
+    set({ pet, inventory, achievements, unlockedAt, restReport: report, loading: false })
 
     if (!petSnap.exists()) await setDoc(doc(db, paths.pet(uid)), pet)
     else if (report) await setDoc(doc(db, paths.pet(uid)), pet)
     if (!invSnap.exists()) await setDoc(doc(db, paths.inventory(uid)), { items: inventory })
 
-    if (report?.died) {
-      get().pushToast(`${pet.name} จากไปแล้ว…`, 'danger')
-    } else if (report?.becameSick) {
-      get().pushToast(`${pet.name} ไม่สบาย ต้องการยาด่วน`, 'warning')
+    if (report?.recovered) {
+      get().pushToast(`${pet.name} หายดีแล้ว ขอบคุณที่พักให้`, 'success')
     }
   },
 
@@ -284,19 +289,45 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (uid) await setDoc(doc(db, paths.inventory(uid)), { items })
   },
 
-  /** Keeps stats moving while the tab stays open, so the pet feels alive. */
+  /**
+   * Charges the pet for time spent in the app, and heals it for time away.
+   *
+   * Only counts as app time while the page is actually on screen. This interval
+   * keeps firing in a backgrounded tab, and billing a participant for a phone
+   * sitting in their pocket would recreate the exact mistake this model exists
+   * to fix.
+   */
   tickDecay: () => {
     const { pet } = get()
     if (!pet.isAlive) return
-    const { pet: next, report } = applyDecay(pet)
-    if (!report) return
+
+    const onScreen = typeof document !== 'undefined' && document.visibilityState === 'visible'
+    const wasSick = pet.health < SICK_THRESHOLD
+    const { pet: next } = applyDecay(pet, Date.now(), onScreen)
+    if (next.lastTickAt === pet.lastTickAt) return
+
     set({ pet: next })
-    if (report.died) {
-      get().pushToast(`${pet.name} จากไปแล้ว…`, 'danger')
+    if (!next.isAlive) {
+      get().pushToast(`${pet.name} หมดแรงไปแล้ว…`, 'danger')
       void get().persistPet(next)
-    } else if (report.becameSick) {
-      get().pushToast(`${pet.name} เริ่มไม่สบายแล้ว`, 'warning')
+    } else if (!wasSick && next.health < SICK_THRESHOLD) {
+      get().pushToast(`${pet.name} เริ่มไม่ไหวแล้ว วางมือถือสักพักไหม`, 'warning')
     }
+  },
+
+  /**
+   * Records a day's reported screen time and lets the pet feel it.
+   *
+   * Lives in the store rather than in the page because it changes the pet, and
+   * it is the only place a participant's phone use outside this app can reach
+   * the game at all.
+   */
+  reportScreenTime: async (minutes) => {
+    const { pet } = get()
+    const next = applyScreenTimePenalty(pet, minutes)
+    if (next === pet) return
+    set({ pet: next })
+    await get().persistPet(next)
   },
 
   completeOnboarding: async (name, species) => {
@@ -314,7 +345,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const fresh = hatchNewPet(get().pet, name.trim() || 'Sproutly', species)
     await get().persistPet(fresh)
     await get().persistInventory(defaultInventory())
-    set({ awayReport: null })
+    set({ restReport: null })
     get().pushToast(`${fresh.name} ฟักออกมาแล้ว รุ่นที่ ${fresh.generation}`, 'success')
   },
 
@@ -333,53 +364,80 @@ export const useAppStore = create<AppState>((set, get) => ({
   startFocus: () =>
     set({
       isFocusActive: true,
+      sessionStartedAt: Date.now(),
       remainingSeconds: get().targetMinutes * 60,
       elapsedSeconds: 0,
-      leftTabDuringSession: false,
+      screenOnDuringSession: false,
     }),
 
+  /**
+   * Recomputes the clock from the session's start timestamp.
+   *
+   * It must not count its own ticks. A participant doing this correctly locks
+   * their phone, and a browser throttles timers in a hidden tab to roughly once
+   * a minute — iOS stops them altogether — so a counted timer would lose most
+   * of a locked-phone session and report a thirty-minute break as a few
+   * minutes. Deriving from wall-clock timestamps means the tab can be frozen
+   * for the whole session and still come back with the right answer.
+   */
   tickFocus: () => {
-    const { remainingSeconds, isFocusActive, sessionMode, elapsedSeconds } = get()
-    if (!isFocusActive) return
+    const { isFocusActive, sessionMode, sessionStartedAt, targetMinutes } = get()
+    if (!isFocusActive || sessionStartedAt === null) return
+
+    const elapsed = Math.floor((Date.now() - sessionStartedAt) / 1000)
 
     // Free mode counts up and never ends on its own; the participant decides
     // when they are done.
     if (sessionMode === 'free') {
-      set({ elapsedSeconds: elapsedSeconds + 1 })
+      set({ elapsedSeconds: elapsed })
       return
     }
 
-    if (remainingSeconds <= 1) {
+    const remaining = targetMinutes * 60 - elapsed
+    if (remaining <= 0) {
+      set({ remainingSeconds: 0 })
       void get().endFocus(true)
       return
     }
-    set({ remainingSeconds: remainingSeconds - 1 })
+    set({ remainingSeconds: remaining, elapsedSeconds: elapsed })
   },
 
-  markLeftTab: () => {
-    if (get().isFocusActive) set({ leftTabDuringSession: true })
+  /**
+   * Notes that the page was on screen during a session.
+   *
+   * A screen-free session is supposed to be spent with the phone down, which
+   * from inside a tab looks like the page being hidden. Being visible is
+   * therefore the state worth flagging: those minutes were spent looking at a
+   * screen, whatever the timer says.
+   */
+  markScreenOn: () => {
+    if (get().isFocusActive) set({ screenOnDuringSession: true })
   },
 
   endFocus: async (completed) => {
-    const {
-      targetMinutes,
-      remainingSeconds,
-      elapsedSeconds,
-      sessionMode,
-      selectedTag,
-      pet,
-      leftTabDuringSession,
-      profile,
-    } = get()
+    const { targetMinutes, sessionStartedAt, sessionMode, selectedTag, pet, screenOnDuringSession, profile } =
+      get()
 
+    const startedAt = sessionStartedAt ?? Date.now()
+    const endedAt = Date.now()
+    // Measured, not counted, for the same reason tickFocus is: the tab may have
+    // been frozen for most of the session, which is the desired behaviour.
+    const realMinutes = Math.floor((endedAt - startedAt) / 60_000)
+    // `completed` means the countdown reached zero. It is trusted over the
+    // floored minute count, which can land a millisecond short of the target.
     const elapsedMinutes =
       sessionMode === 'free'
-        ? Math.floor(elapsedSeconds / 60)
+        ? realMinutes
         : completed
           ? targetMinutes
-          : Math.floor((targetMinutes * 60 - remainingSeconds) / 60)
+          : Math.min(targetMinutes, realMinutes)
 
-    set({ isFocusActive: false, remainingSeconds: targetMinutes * 60, elapsedSeconds: 0 })
+    set({
+      isFocusActive: false,
+      sessionStartedAt: null,
+      remainingSeconds: targetMinutes * 60,
+      elapsedSeconds: 0,
+    })
 
     // Matches the Android app: sessions under 2 minutes earn nothing. They are
     // still recorded, because an attempt that was given up on says something
@@ -389,24 +447,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         await logSession(profile.uid, {
           targetMinutes: sessionMode === 'free' ? 0 : targetMinutes,
           actualMinutes: elapsedMinutes,
-          startTime: Date.now() - elapsedMinutes * 60 * 1000,
-          endTime: Date.now(),
+          startTime: startedAt,
+          endTime: endedAt,
           completed: false,
           abandoned: true,
           expEarned: 0,
           coinsEarned: 0,
           itemRewardName: null,
           tag: selectedTag,
-          source: leftTabDuringSession ? 'web_timer_interrupted' : 'web_timer_verified',
+          source: screenOnDuringSession ? 'web_timer_screen_on' : 'web_timer_screen_off',
           mode: sessionMode,
         })
       }
       return
     }
 
-    const source: SessionSource = leftTabDuringSession
-      ? 'web_timer_interrupted'
-      : 'web_timer_verified'
+    const source: SessionSource = screenOnDuringSession
+      ? 'web_timer_screen_on'
+      : 'web_timer_screen_off'
 
     if (sessionMode === 'free') {
       await get().bankFreeSession(elapsedMinutes, selectedTag, source)
@@ -615,5 +673,5 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   dismissCelebration: () => set((state) => ({ celebrations: state.celebrations.slice(1) })),
 
-  dismissAwayReport: () => set({ awayReport: null }),
+  dismissRestReport: () => set({ restReport: null }),
 }))

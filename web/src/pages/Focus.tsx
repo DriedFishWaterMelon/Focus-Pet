@@ -38,13 +38,13 @@ export function Focus() {
     elapsedSeconds,
     sessionMode,
     selectedTag,
-    leftTabDuringSession,
+    screenOnDuringSession,
     setSessionMode,
     setTargetMinutes,
     setSelectedTag,
     startFocus,
     tickFocus,
-    markLeftTab,
+    markScreenOn,
     endFocus,
   } = useAppStore()
 
@@ -54,33 +54,35 @@ export function Focus() {
     return () => window.clearInterval(interval)
   }, [isFocusActive, tickFocus])
 
-  // Detect the participant leaving the tab. This is the only signal a browser has
-  // that the user went elsewhere, and it is weak: it cannot see them picking up a
-  // different device or opening another app over the browser on a phone. Sessions
-  // flagged here are stored as 'web_timer_interrupted' so the analysis can exclude them.
+  // Flag the page being on screen during a session.
+  //
+  // A screen-free session is time with the phone down, which from inside a tab
+  // looks like the page being hidden — locking the screen hides it. So the state
+  // worth recording is the opposite one: the page visible means the participant
+  // was looking at a screen, and those minutes are stored as
+  // 'web_timer_screen_on' so the analysis can weigh them differently.
+  //
+  // This remains weak evidence in one direction: a hidden page cannot tell a
+  // locked phone from one that switched to another app. It is the strongest
+  // signal a browser has, and the study's limitations say so plainly.
   useEffect(() => {
-    const onHidden = () => {
-      if (document.hidden) markLeftTab()
+    if (!isFocusActive) return
+    if (document.visibilityState === 'visible') markScreenOn()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') markScreenOn()
     }
-    document.addEventListener('visibilitychange', onHidden)
-    return () => document.removeEventListener('visibilitychange', onHidden)
-  }, [markLeftTab])
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [isFocusActive, markScreenOn])
 
-  useEffect(() => {
-    if (!isFocusActive || !('wakeLock' in navigator)) return
-    let sentinel: WakeLockSentinel | null = null
-    navigator.wakeLock
-      .request('screen')
-      .then((lock) => {
-        sentinel = lock
-      })
-      .catch(() => {
-        // Wake Lock is unavailable on some browsers; the session still works.
-      })
-    return () => {
-      void sentinel?.release()
-    }
-  }, [isFocusActive])
+  // There is deliberately no screen wake lock here.
+  //
+  // One used to be taken for the duration of a session, to stop the phone
+  // locking and the timer losing the tab. That meant this app held the screen
+  // on for every minute of what it called screen-free time — the plainest
+  // possible contradiction of what it is for. The timer works from wall-clock
+  // timestamps rather than from a running tab, so locking the phone is both
+  // safe and exactly what a participant is supposed to do.
 
   const free = sessionMode === 'free'
 
@@ -161,7 +163,7 @@ export function Focus() {
                 : `เป้าหมาย ${targetMinutes} นาที`}
           </p>
 
-          {isFocusActive && leftTabDuringSession && (
+          {isFocusActive && screenOnDuringSession && (
             <p
               className="mx-5 mt-5 rounded-2xl border-2 border-dashed px-3 py-2 text-center text-xs font-bold"
               style={{ borderColor: '#FF6B35', color: '#FF6B35' }}

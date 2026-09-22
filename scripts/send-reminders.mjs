@@ -83,27 +83,27 @@ function inQuietHours(hour, from, to) {
   return from > to ? hour >= from || hour < to : hour >= from && hour < to
 }
 
+/**
+ * Builds the reminder text.
+ *
+ * Every line here has to survive one question: does it give the participant a
+ * reason to pick up their phone, or to put it down? The previous versions said
+ * the pet was starving and needed medicine urgently, which is manufactured
+ * urgency pointing at the screen — from an app whose entire claim is that it
+ * reduces screen time. A notification is already an interruption; the least it
+ * can do is invite the thing being studied.
+ *
+ * So there is one message, it is an invitation to start a screen-free session,
+ * and it never implies the pet is in danger. Under the current rules it is not:
+ * time away heals it.
+ */
 function messageFor(pet, push) {
   const name = push.petName || pet.name || 'สัตว์เลี้ยงของคุณ'
 
-  if (pet.health <= 20) {
-    return {
-      tag: 'critical',
-      title: `💔 ${name} อ่อนแอมาก`,
-      body: 'ใกล้จะไม่ไหวแล้ว รีบเปิดแอปให้ยาด่วน',
-    }
-  }
-  if (pet.health < 50) {
-    return {
-      tag: 'sick',
-      title: `🤒 ${name} ไม่สบาย`,
-      body: 'ต้องการยาสมุนไพร เปิดแอปเพื่อดูแล',
-    }
-  }
   return {
-    tag: 'hungry',
-    title: `🍃 ${name} หิวแล้ว`,
-    body: 'แวะมาให้อาหารหน่อย แล้วเริ่มเวลาปลอดหน้าจอกันต่อ',
+    tag: 'invite',
+    title: `🍃 ${name} รออยู่นะ`,
+    body: 'วางมือถือสักพักไหม เวลาที่คุณพัก มันจะโตขึ้นเอง',
   }
 }
 

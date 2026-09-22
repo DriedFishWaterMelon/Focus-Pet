@@ -79,7 +79,7 @@ async function seedUser(uid, participantId, opts = {}) {
       tag: 'Study',
       // One interrupted session per participant, so the export's data-quality
       // split has something to report.
-      source: i === 1 ? 'web_timer_interrupted' : 'web_timer_verified',
+      source: i === 1 ? 'web_timer_screen_on' : 'web_timer_screen_off',
       mode: i === 2 ? 'free' : 'targeted',
     })
   }
@@ -117,7 +117,7 @@ await db.collection('users').doc('uid_casual').collection('sessions').add({
   coinsEarned: 18,
   itemRewardName: null,
   tag: 'Deep Work',
-  source: 'web_timer_verified',
+  source: 'web_timer_screen_off',
 })
 
 console.log(

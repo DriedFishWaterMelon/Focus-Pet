@@ -71,8 +71,8 @@ node export-research-data.mjs --key ./serviceAccount.json --out ./export
 
 | ค่า | ความหมาย | น้ำหนักความน่าเชื่อถือ |
 |---|---|---|
-| `web_timer_verified` | เว็บจับเวลาให้ โดยผู้ใช้ไม่ออกจากแท็บ | สูงสุด (บนเว็บ) |
-| `web_timer_interrupted` | จับเวลาแต่ผู้ใช้สลับแท็บระหว่างทาง | ต่ำ ควรแยกหรือตัดออก |
+| `web_timer_screen_off` | หน้าเว็บถูกซ่อนตลอดเซสชัน = วางมือถือไว้จริง | สูงสุด (บนเว็บ) |
+| `web_timer_screen_on` | ผู้ใช้เปิดหน้าจอค้างไว้ = ยังจ้องจออยู่ | ต่ำ ควรแยกหรือตัดออก |
 | `self_reported` | ผู้ใช้กรอกเองจาก Digital Wellbeing | ต่ำ เป็น self-report |
 | `android_usage_stats` | วัดจากแอป Android จริง | สูงสุด (ยังไม่ได้ใช้) |
 

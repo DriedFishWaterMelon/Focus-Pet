@@ -205,7 +205,7 @@ async function main() {
       // Interrupted sessions are counted separately rather than dropped, so the
       // analysis can decide whether to include them instead of us deciding here.
       if (s.abandoned === true) day.abandoned++
-      else if (s.source === 'web_timer_interrupted') day.interrupted++
+      else if (s.source === 'web_timer_screen_on') day.interrupted++
       else {
         const minutes = Number(s.actualMinutes) || 0
         day.focusMinutes += minutes
@@ -389,13 +389,15 @@ async function main() {
   // `mode` was appended after `source`, and a "last column" shortcut silently
   // started reporting zero verified sessions the moment it was.
   const SESSION_COL = { abandoned: 9, source: 14, mode: 15 }
-  const verified = sessionRows.filter((r) => r[SESSION_COL.source] === 'web_timer_verified').length
-  const interrupted = sessionRows.filter(
-    (r) => r[SESSION_COL.source] === 'web_timer_interrupted',
+  const screenOff = sessionRows.filter(
+    (r) => r[SESSION_COL.source] === 'web_timer_screen_off',
+  ).length
+  const screenOn = sessionRows.filter(
+    (r) => r[SESSION_COL.source] === 'web_timer_screen_on',
   ).length
   console.log(`\nคุณภาพข้อมูลเซสชัน:`)
-  console.log(`  จับเวลาบนเว็บ (เชื่อถือได้):  ${verified}`)
-  console.log(`  ถูกขัดจังหวะ (ควรแยกวิเคราะห์): ${interrupted}`)
+  console.log(`  ปิดหน้าจอตลอดเซสชัน (เชื่อถือได้):   ${screenOff}`)
+  console.log(`  เปิดหน้าจอค้างไว้ (ควรแยกวิเคราะห์): ${screenOn}`)
   // Abandoned attempts earned nothing and are excluded from focus_minutes, so
   // they are reported separately rather than left invisible: a high count means
   // participants are setting targets they cannot keep, which is a finding.

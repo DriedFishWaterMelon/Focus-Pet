@@ -238,22 +238,33 @@ export function Onboarding() {
   )
 }
 
-/** Shown once after the app reopens, summarising what the pet went through. */
-export function AwayReportModal() {
-  const report = useAppStore((s) => s.awayReport)
+/**
+ * Shown once after the app reopens, crediting the participant for the time the
+ * phone was down.
+ *
+ * This modal used to tally what the pet lost while they were away, so the app
+ * greeted someone returning from a successful stretch off their phone with a
+ * list of the damage they had done. It now reports the opposite, because the
+ * pet now works the opposite way.
+ */
+export function RestReportModal() {
+  const report = useAppStore((s) => s.restReport)
   const pet = useAppStore((s) => s.pet)
-  const dismiss = useAppStore((s) => s.dismissAwayReport)
+  const dismiss = useAppStore((s) => s.dismissRestReport)
 
-  // A death gets the memorial screen instead, and short gaps are not worth a modal.
-  if (!report || report.died || report.hoursAway < 4) return null
+  // Short gaps are not worth a modal.
+  if (!report || report.hoursAway < 4) return null
 
   const hours = Math.round(report.hoursAway)
   const rows = [
-    { label: 'ความหิว', value: report.hungerLost, accent: 0 },
-    { label: 'ความสุข', value: report.happinessLost, accent: 3 },
-    { label: 'พลังงาน', value: report.energyLost, accent: 2 },
-    { label: 'สุขภาพ', value: report.healthLost, accent: 1 },
+    { label: 'ความหิว', value: report.hungerGained, accent: 0 },
+    { label: 'ความสุข', value: report.happinessGained, accent: 3 },
+    { label: 'พลังงาน', value: report.energyGained, accent: 2 },
+    { label: 'สุขภาพ', value: report.healthGained, accent: 1 },
   ].filter((row) => row.value >= 1)
+
+  // Nothing to celebrate when the pet was already at the rest ceiling.
+  if (rows.length === 0 && !report.recovered) return null
 
   return (
     <Modal onClose={dismiss} accent={3}>
@@ -263,9 +274,11 @@ export function AwayReportModal() {
           className="ts-2 mt-2 text-3xl font-black uppercase"
           style={{ fontFamily: 'var(--font-display)', color: '#FF6B35' }}
         >
-          คุณหายไป {hours < 24 ? `${hours} ชม.` : `${Math.round(hours / 24)} วัน`}
+          วางมือถือไป {hours < 24 ? `${hours} ชม.` : `${Math.round(hours / 24)} วัน`}
         </h2>
-        <p className="mt-1 text-xs font-bold text-white/70">ระหว่างนั้น {pet.name} เป็นแบบนี้</p>
+        <p className="mt-1 text-xs font-bold text-white/70">
+          ระหว่างนั้น {pet.name} ได้พักเต็มที่
+        </p>
       </div>
 
       <div className="mt-4 space-y-2">
@@ -279,24 +292,24 @@ export function AwayReportModal() {
               {row.label}
             </span>
             <span className="text-lg font-black" style={{ color: accentTextAt(row.accent) }}>
-              −{Math.round(row.value)}
+              +{Math.round(row.value)}
             </span>
           </div>
         ))}
       </div>
 
-      {report.becameSick && (
+      {report.recovered && (
         <p
           className="mt-4 rounded-2xl border-4 border-dashed px-3 py-2 text-center text-xs font-black"
-          style={{ borderColor: '#FFE600', color: '#FFE600' }}
+          style={{ borderColor: '#00F5D4', color: '#00F5D4' }}
         >
-          🤒 {pet.name} ป่วยแล้ว ใช้ยาก่อนสายเกินไป
+          💚 {pet.name} หายป่วยแล้ว เพราะคุณให้เวลามันได้พัก
         </p>
       )}
 
       <div className="mt-5">
         <Button accent={3} className="w-full" onClick={dismiss}>
-          ดูแลเลย
+          ดีเลย
         </Button>
       </div>
     </Modal>

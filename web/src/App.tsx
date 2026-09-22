@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { MeshBackdrop } from './components/Decor'
 import {
-  AwayReportModal,
+  RestReportModal,
   CelebrationModal,
   DeathScreen,
   Onboarding,
@@ -226,7 +226,7 @@ export default function App() {
           </div>
         </nav>
 
-        <AwayReportModal />
+        <RestReportModal />
         <CelebrationModal />
         <ToastLayer />
       </div>

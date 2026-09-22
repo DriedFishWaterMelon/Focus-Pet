@@ -7,7 +7,7 @@
 // results depend on, so they need to be unit-testable without a browser or Firebase.
 
 import type {
-  AwayReport,
+  RestReport,
   InventoryItem,
   Pet,
   PetMood,
@@ -22,21 +22,63 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * Stat loss per hour of neglect. Tuned so a fully cared-for pet takes roughly
- * 40 hours to become hungry enough to start losing health, and about 65 hours
- * of total neglect to die — a bit under three days. Long enough that missing a
- * day is survivable, short enough that the pet genuinely depends on the user.
+ * Stat loss per minute spent inside this app.
+ *
+ * The pet responds to phone use, not to elapsed time. An earlier version
+ * decayed per wall-clock hour, which punished precisely the behaviour the study
+ * exists to produce: a participant who stayed off their phone for three days
+ * came back to a dead pet, so the most successful person in the study got the
+ * worst outcome. Time away now heals instead of harming.
+ *
+ * Minutes inside Focus Pet are the only phone use a browser can actually
+ * measure, so they are what the pet feels moment to moment. An app that asks
+ * people to look at screens less should be the first screen it discourages.
+ *
+ * Tuned so a quick check-in costs almost nothing, while an hour of wandering
+ * around the app is plainly visible on the pet.
  */
-export const DECAY_PER_HOUR = {
-  hunger: 2.5,
-  happiness: 2,
-  energy: 1.5,
+export const DECAY_PER_APP_MINUTE = {
+  hunger: 0.5,
+  happiness: 0.4,
+  energy: 0.6,
 } as const
 
-/** Health drains only while a core need is fully empty. */
-export const HEALTH_DRAIN_PER_HOUR = 4
+/**
+ * Stat recovery per hour with the app closed, up to REST_CEILING.
+ *
+ * This is what makes the pet agree with the thesis rather than fight it:
+ * putting the phone down is what makes it well. A night's sleep brings a tired
+ * pet back.
+ */
+export const RECOVERY_PER_HOUR_AWAY = {
+  hunger: 3,
+  happiness: 3,
+  energy: 4,
+} as const
 
-/** Health slowly returns once every core need is back above this level. */
+/**
+ * Rest alone tops out here. Climbing above it takes food, play and screen-free
+ * sessions, so caring for the pet still means something and the shop still has
+ * a purpose — but simply being away can never hurt.
+ */
+export const REST_CEILING = 70
+
+/**
+ * Stat loss per minute of daily screen time above the allowance, applied once
+ * when a participant reports a day's total.
+ *
+ * Self-reported and therefore weak evidence, which is why it is a gentle slope
+ * rather than the main driver. It is here because this app's own usage is a
+ * sliver of a participant's screen time, and without it the pet would be blind
+ * to the very thing the study is about.
+ */
+export const DECAY_PER_SCREEN_MINUTE = 0.08
+export const SCREEN_TIME_ALLOWANCE_MINUTES = 120
+
+/** Health drains only while a core need is fully empty, and only from app use. */
+export const HEALTH_DRAIN_PER_APP_MINUTE = 0.5
+
+/** Health returns while the phone is down and every core need is above this. */
 export const HEALTH_RECOVERY_PER_HOUR = 3
 export const HEALTH_RECOVERY_THRESHOLD = 40
 
@@ -152,17 +194,21 @@ export function defaultPet(overrides: Partial<Pet> = {}): Pet {
 
 export interface DecayResult {
   pet: Pet
-  report: AwayReport | null
+  report: RestReport | null
 }
 
 /**
- * Applies everything that should have happened while the app was closed.
+ * Advances the pet to `now`.
  *
- * Decay is derived from elapsed wall-clock time rather than from a running timer,
- * because the page is usually not open. Closing the tab must not pause the pet —
- * that is what makes the pet feel like it exists independently of the app.
+ * `inApp` says whether the elapsed span was spent with this app open and on
+ * screen. It is called once a minute while it is, and once with `inApp: false`
+ * when the app reopens after being closed, so one function covers both "the
+ * participant is here on their phone" and "the participant was away from it".
+ *
+ * The two cases are exclusive by construction: a span is either app time, which
+ * costs, or time away, which heals.
  */
-export function applyDecay(pet: Pet, now: number = Date.now()): DecayResult {
+export function applyDecay(pet: Pet, now: number = Date.now(), inApp = false): DecayResult {
   if (!pet.isAlive) return { pet, report: null }
 
   const elapsedMs = now - pet.lastTickAt
@@ -170,28 +216,40 @@ export function applyDecay(pet: Pet, now: number = Date.now()): DecayResult {
   // Ignore trivial gaps so a page refresh does not nibble at the stats.
   if (hours < 0.01) return { pet, report: null }
 
+  const appMinutes = inApp ? elapsedMs / 60_000 : 0
+  const hoursAway = inApp ? 0 : hours
+
   const wasSick = pet.health < SICK_THRESHOLD
 
-  const hunger = clamp(pet.hunger - DECAY_PER_HOUR.hunger * hours)
-  const happiness = clamp(pet.happiness - DECAY_PER_HOUR.happiness * hours)
-  const energy = clamp(pet.energy - DECAY_PER_HOUR.energy * hours)
+  const spend = (value: number, perMinute: number, perHour: number) =>
+    rest(clamp(value - perMinute * appMinutes), perHour, hoursAway)
 
-  // Health responds to how long a need was actually empty, not just to its final
-  // value, so a long absence is penalised correctly rather than only once.
-  const hoursStarving = hoursAtZero(pet.hunger, DECAY_PER_HOUR.hunger, hours)
-  const hoursMiserable = hoursAtZero(pet.happiness, DECAY_PER_HOUR.happiness, hours)
-  const hoursExhausted = hoursAtZero(pet.energy, DECAY_PER_HOUR.energy, hours)
-  const hoursInCrisis = Math.max(hoursStarving, hoursMiserable, hoursExhausted)
+  const hunger = spend(pet.hunger, DECAY_PER_APP_MINUTE.hunger, RECOVERY_PER_HOUR_AWAY.hunger)
+  const happiness = spend(
+    pet.happiness,
+    DECAY_PER_APP_MINUTE.happiness,
+    RECOVERY_PER_HOUR_AWAY.happiness,
+  )
+  const energy = spend(pet.energy, DECAY_PER_APP_MINUTE.energy, RECOVERY_PER_HOUR_AWAY.energy)
+
+  // Health responds to how long a need was actually empty, not just to its
+  // final value, so a long stretch of heavy app use is penalised throughout
+  // rather than only once.
+  const inCrisis = Math.max(
+    minutesAtZero(pet.hunger, DECAY_PER_APP_MINUTE.hunger, appMinutes),
+    minutesAtZero(pet.happiness, DECAY_PER_APP_MINUTE.happiness, appMinutes),
+    minutesAtZero(pet.energy, DECAY_PER_APP_MINUTE.energy, appMinutes),
+  )
 
   let health = pet.health
-  if (hoursInCrisis > 0) {
-    health = clamp(health - HEALTH_DRAIN_PER_HOUR * hoursInCrisis)
+  if (inCrisis > 0) {
+    health = clamp(health - HEALTH_DRAIN_PER_APP_MINUTE * inCrisis)
   } else if (
-    pet.hunger >= HEALTH_RECOVERY_THRESHOLD &&
-    pet.happiness >= HEALTH_RECOVERY_THRESHOLD &&
-    pet.energy >= HEALTH_RECOVERY_THRESHOLD
+    hunger >= HEALTH_RECOVERY_THRESHOLD &&
+    happiness >= HEALTH_RECOVERY_THRESHOLD &&
+    energy >= HEALTH_RECOVERY_THRESHOLD
   ) {
-    health = clamp(health + HEALTH_RECOVERY_PER_HOUR * hours)
+    health = clamp(health + HEALTH_RECOVERY_PER_HOUR * hoursAway)
   }
 
   const isAlive = health > 0
@@ -208,50 +266,100 @@ export function applyDecay(pet: Pet, now: number = Date.now()): DecayResult {
 
   return {
     pet: updated,
-    report: {
-      hoursAway: hours,
-      hungerLost: pet.hunger - hunger,
-      happinessLost: pet.happiness - happiness,
-      energyLost: pet.energy - energy,
-      healthLost: pet.health - health,
-      died: !isAlive,
-      becameSick: !wasSick && health < SICK_THRESHOLD && isAlive,
-    },
+    // Only time away is worth reporting back; the per-minute cost of being in
+    // the app is something the player watches happen live.
+    report:
+      hoursAway > 0
+        ? {
+            hoursAway,
+            hungerGained: hunger - pet.hunger,
+            happinessGained: happiness - pet.happiness,
+            energyGained: energy - pet.energy,
+            healthGained: health - pet.health,
+            recovered: wasSick && health >= SICK_THRESHOLD,
+          }
+        : null,
   }
 }
 
-/** How many of the elapsed hours a stat spent sitting at zero. */
-function hoursAtZero(startValue: number, ratePerHour: number, elapsedHours: number): number {
-  const hoursUntilEmpty = startValue / ratePerHour
-  return Math.max(0, elapsedHours - hoursUntilEmpty)
+/**
+ * Raises a stat toward the rest ceiling.
+ *
+ * A stat already above the ceiling is left alone rather than pulled down to it,
+ * so time away is never able to undo care the participant has already given.
+ */
+function rest(value: number, perHour: number, hoursAway: number): number {
+  if (hoursAway <= 0 || value >= REST_CEILING) return value
+  return Math.min(REST_CEILING, value + perHour * hoursAway)
+}
+
+/** How many of the elapsed app minutes a stat spent sitting at zero. */
+function minutesAtZero(startValue: number, ratePerMinute: number, elapsedMinutes: number): number {
+  const minutesUntilEmpty = startValue / ratePerMinute
+  return Math.max(0, elapsedMinutes - minutesUntilEmpty)
+}
+
+/**
+ * Applies the cost of a day's reported screen time.
+ *
+ * Called once when a participant logs a daily total. Minutes below the
+ * allowance cost nothing: the goal is less screen time, not none, and a pet
+ * that punished an ordinary day would just teach people to under-report.
+ */
+export function applyScreenTimePenalty(pet: Pet, reportedMinutes: number): Pet {
+  if (!pet.isAlive) return pet
+  const excess = Math.max(0, reportedMinutes - SCREEN_TIME_ALLOWANCE_MINUTES)
+  if (excess === 0) return pet
+
+  const cost = DECAY_PER_SCREEN_MINUTE * excess
+  return {
+    ...pet,
+    hunger: clamp(pet.hunger - cost),
+    happiness: clamp(pet.happiness - cost),
+    energy: clamp(pet.energy - cost),
+  }
 }
 
 /** Hunger below this reads as hungry, both for mood and for reminders. */
 export const HUNGRY_THRESHOLD = 30
 
+/** A day without a screen-free session is when a nudge is worth sending. */
+export const REMINDER_AFTER_IDLE_HOURS = 24
+
 /**
- * When this pet will next need attention, as a timestamp.
+ * When this participant is next worth nudging, as a timestamp.
+ *
+ * It deliberately keys off the last screen-free session rather than off the
+ * pet's stats. Reminding someone that their pet is starving would be a
+ * reminder to open the app, and this study cannot ship an app that manufactures
+ * reasons to pick the phone up. The only honest nudge is an invitation to put
+ * it down again, so it goes out when a day has passed without a session.
  *
  * Computed here and stored on the pet so the reminder script does not have to
- * re-implement the decay maths. Duplicating it there would mean two copies of
- * the rules that decide when a participant gets nudged, and they would drift.
+ * re-implement the rule and let the two copies drift.
  *
- * Returns null for a pet that already needs attention or is dead — there is
- * nothing to schedule in either case.
+ * Returns null for a dead pet, and for one whose participant is already overdue
+ * — there is nothing left to schedule in either case.
  */
 export function nextAttentionAt(pet: Pet, now: number = Date.now()): number | null {
   if (!pet.isAlive) return null
-  if (pet.hunger < HUNGRY_THRESHOLD || pet.health < SICK_THRESHOLD) return null
 
-  const hoursUntilHungry = (pet.hunger - HUNGRY_THRESHOLD) / DECAY_PER_HOUR.hunger
-  return now + hoursUntilHungry * 3_600_000
+  const dueAt = pet.lastFocusTimestamp + REMINDER_AFTER_IDLE_HOURS * 3_600_000
+  return dueAt <= now ? null : dueAt
 }
 
-/** Hours of total neglect before this pet would die, from its current state. */
-export function hoursUntilDeath(pet: Pet): number {
+/**
+ * Minutes of continuous app use that would kill this pet from its current
+ * state, which is the only way it can now die.
+ *
+ * Nothing about being away shortens this. It exists so the app can warn a
+ * participant who is spending a long stretch inside it, which is the one
+ * behaviour the pet is meant to discourage.
+ */
+export function appMinutesUntilDeath(pet: Pet): number {
   if (!pet.isAlive) return 0
-  const hoursUntilStarving = pet.hunger / DECAY_PER_HOUR.hunger
-  return hoursUntilStarving + pet.health / HEALTH_DRAIN_PER_HOUR
+  const minutesUntilStarving = pet.hunger / DECAY_PER_APP_MINUTE.hunger
+  return minutesUntilStarving + pet.health / HEALTH_DRAIN_PER_APP_MINUTE
 }
 
 // ---------------------------------------------------------------------------

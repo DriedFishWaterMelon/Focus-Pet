@@ -159,12 +159,25 @@ export type SessionMode = 'targeted' | 'free'
  * Where a session's minutes came from. The research analysis must be able to tell
  * browser-timed sessions apart from self-reported ones, because they do not carry
  * the same evidential weight.
+ *
+ * The two browser values were originally the other way round: a session counted
+ * as verified only if the page stayed *visible* throughout, and was downgraded
+ * the moment the page was hidden. On a phone, locking the screen hides the page,
+ * so that graded a genuine screen-free session as untrustworthy and a half hour
+ * of staring at the timer as the gold standard — the study's strongest data
+ * would have measured the opposite of what it claimed to.
  */
 export type SessionSource =
-  /** Timed by the browser with the tab visible the whole time. Strongest on web. */
-  | 'web_timer_verified'
-  /** Timed by the browser, but the user left the tab during the session. */
-  | 'web_timer_interrupted'
+  /**
+   * Timed by the browser with the page hidden throughout, which is what putting
+   * the phone down looks like from inside a tab. The best evidence the web can
+   * offer, and still only evidence that this page was not being looked at:
+   * a browser cannot tell a locked phone from a phone that switched to another
+   * app. See the study limitations.
+   */
+  | 'web_timer_screen_off'
+  /** Timed by the browser, but the page was on screen during the session. */
+  | 'web_timer_screen_on'
   /** Typed in by the participant from their phone's Digital Wellbeing screen. */
   | 'self_reported'
   /** Measured by the Android companion app via UsageStatsManager. Strongest of all. */
@@ -260,13 +273,20 @@ export function needsReconsent(enrolment: Enrolment, current: string): boolean {
   return isEnrolled(enrolment) && enrolment.consentVersion !== current
 }
 
-/** What happened to the pet while the app was closed, shown on the next open. */
-export interface AwayReport {
+/**
+ * How the pet benefited from the phone being down, shown on the next open.
+ *
+ * This used to be a list of what the pet lost while the participant was away,
+ * which told someone who had just succeeded at the study's goal that they had
+ * harmed their pet. Time away is now the thing that heals it, so the report
+ * says so.
+ */
+export interface RestReport {
   hoursAway: number
-  hungerLost: number
-  happinessLost: number
-  energyLost: number
-  healthLost: number
-  died: boolean
-  becameSick: boolean
+  hungerGained: number
+  happinessGained: number
+  energyGained: number
+  healthGained: number
+  /** The rest was enough to bring the pet back out of sickness. */
+  recovered: boolean
 }

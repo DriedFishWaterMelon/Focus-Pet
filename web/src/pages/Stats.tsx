@@ -18,8 +18,8 @@ import type { ScreenFreeSession } from '../lib/types'
 import { useAppStore } from '../store/useAppStore'
 
 const SOURCE_LABELS: Record<ScreenFreeSession['source'], string> = {
-  web_timer_verified: 'จับเวลาบนเว็บ',
-  web_timer_interrupted: 'ถูกขัดจังหวะ',
+  web_timer_screen_off: 'ปิดหน้าจอไว้',
+  web_timer_screen_on: 'เปิดหน้าจอค้างไว้',
   self_reported: 'กรอกเอง',
   android_usage_stats: 'วัดจากแอป',
 }
@@ -27,6 +27,7 @@ const SOURCE_LABELS: Record<ScreenFreeSession['source'], string> = {
 export function Stats() {
   const profile = useAppStore((s) => s.profile)
   const pushToast = useAppStore((s) => s.pushToast)
+  const reportScreenTime = useAppStore((s) => s.reportScreenTime)
   const [sessions, setSessions] = useState<ScreenFreeSession[]>([])
   const [days, setDays] = useState<ScreenTimeDay[]>([])
   const [minutesInput, setMinutesInput] = useState('')
@@ -42,7 +43,7 @@ export function Stats() {
   }, [profile])
 
   const totals = useMemo(() => {
-    const verified = sessions.filter((s) => s.source !== 'web_timer_interrupted')
+    const verified = sessions.filter((s) => s.source !== 'web_timer_screen_on')
     return {
       count: sessions.length,
       minutes: verified.reduce((sum, s) => sum + s.actualMinutes, 0),
@@ -67,6 +68,9 @@ export function Stats() {
       recordedAt: Date.now(),
     }
     await logScreenTimeDay(profile.uid, entry)
+    // The pet feels a heavy day. This is the only route by which phone use
+    // outside this app reaches the game at all.
+    await reportScreenTime(entry.minutes)
     setDays((prev) =>
       [...prev.filter((d) => d.date !== entry.date), entry].sort((a, b) =>
         a.date.localeCompare(b.date),

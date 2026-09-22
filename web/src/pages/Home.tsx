@@ -9,7 +9,7 @@ import { HAPTIC, accentTextAt, haptic } from '../lib/design'
 import {
   SICK_THRESHOLD,
   expProgress,
-  hoursUntilDeath,
+  appMinutesUntilDeath,
   moodOf,
   streakAtRisk,
   toIsoDate,
@@ -25,7 +25,7 @@ export function Home() {
 
   const mood = moodOf(pet)
   const atRisk = streakAtRisk(pet, toIsoDate(Date.now()))
-  const hoursLeft = hoursUntilDeath(pet)
+  const appMinutesLeft = appMinutesUntilDeath(pet)
 
   const quickFood = inventory.find((item) => item.category === 'FOOD' && item.quantity > 0)
   const medicine = inventory.find((item) => item.category === 'MEDICINE' && item.quantity > 0)
@@ -66,7 +66,10 @@ export function Home() {
             🚨 {pet.name} ป่วยหนัก!
           </p>
           <p className="relative z-10 mt-1 text-sm font-bold text-white">
-            เหลือเวลาอีกประมาณ {Math.round(hoursLeft)} ชั่วโมง
+            ถ้ายังอยู่ในแอปต่อ จะไหวอีกประมาณ {Math.round(appMinutesLeft)} นาที
+          </p>
+          <p className="relative z-10 mt-1 text-xs font-bold text-white/80">
+            วางมือถือลงสักพัก แล้ว{pet.name}จะค่อย ๆ ฟื้นเอง
           </p>
           <div className="relative z-10 mt-4">
             {medicine ? (
