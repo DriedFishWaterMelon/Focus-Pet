@@ -21,6 +21,7 @@ import {
   levelFromExp,
   minutesToNextFreePoint,
   moodOf,
+  nextAttentionAt,
   nextStreak,
   playWithPet,
   rewardItemFor,
@@ -375,5 +376,43 @@ describe('free mode', () => {
     const outcome = completeFreeSession(defaultPet(), 12, 'Study', 'web_timer_verified')
     expect(outcome.pet.totalFocusMinutes).toBe(12)
     expect(outcome.pet.streakDays).toBe(1)
+  })
+})
+
+describe('reminder schedule', () => {
+  it('schedules nothing for a pet that already needs help', () => {
+    // A reminder is for time that has not arrived yet; a hungry pet should be
+    // messaged now, which is the sender's job, not the scheduler's.
+    expect(nextAttentionAt(defaultPet({ hunger: 10 }))).toBeNull()
+    expect(nextAttentionAt(defaultPet({ health: 40 }))).toBeNull()
+  })
+
+  it('schedules nothing for a dead pet', () => {
+    expect(nextAttentionAt(defaultPet({ isAlive: false }))).toBeNull()
+  })
+
+  it('predicts when hunger will cross the threshold', () => {
+    // Hunger 80 falling at 2.5/hr reaches 30 in exactly 20 hours.
+    const now = Date.now()
+    const at = nextAttentionAt(defaultPet({ hunger: 80 }), now)
+    expect(at).not.toBeNull()
+    expect((at as number) - now).toBeCloseTo(20 * 3_600_000, -3)
+  })
+
+  it('agrees with the mood the pet will actually be in by then', () => {
+    // The scheduled moment must be the moment moodOf starts saying HUNGRY,
+    // or participants get reminded about a pet that looks fine.
+    const pet = defaultPet({ hunger: 60, happiness: 100, energy: 100 })
+    const at = nextAttentionAt(pet) as number
+    const { pet: future } = applyDecay(pet, at + 60_000)
+    expect(moodOf(future)).toBe('HUNGRY')
+  })
+
+  it('does not fire early for a well-fed pet', () => {
+    const pet = defaultPet({ hunger: 100 })
+    const at = nextAttentionAt(pet) as number
+    const { pet: soon } = applyDecay(pet, Date.now() + 3_600_000)
+    expect(at).toBeGreaterThan(Date.now() + 3_600_000)
+    expect(moodOf(soon)).not.toBe('HUNGRY')
   })
 })

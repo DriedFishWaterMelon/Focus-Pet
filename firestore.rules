@@ -18,7 +18,13 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
 
-      // Pet state, inventory, sessions, daily screen time and survey responses.
+      // Pet state, inventory, achievements, the push token and reminder
+      // schedule, sessions, daily screen time and survey responses.
+      //
+      // The push document holds a messaging token, which is a capability:
+      // anyone holding it can send that device a notification. It stays inside
+      // the per-user tree so the same rule protects it as everything else, and
+      // only the research team's service account can read it to send reminders.
       match /{subcollection=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }

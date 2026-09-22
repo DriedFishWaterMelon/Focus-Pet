@@ -20,8 +20,10 @@ import {
   hatchNewPet,
   itemIdForRewardName,
   minutesToNextFreePoint,
+  nextAttentionAt,
   playWithPet,
 } from '../lib/gameLogic'
+import { publishAttentionSchedule } from '../lib/notifications'
 import { logSession } from '../lib/research'
 import {
   claimParticipantId,
@@ -265,6 +267,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const uid = get().profile?.uid
     if (!uid) return
     await setDoc(doc(db, paths.pet(uid)), pet)
+
+    // Tell the reminder sender when this pet will next need help. Computed by
+    // gameLogic so the rule lives with the other game rules.
+    void publishAttentionSchedule(uid, pet, nextAttentionAt(pet))
     if (newlyUnlocked.length > 0) {
       await setDoc(doc(db, paths.achievements(uid)), { unlockedAt: get().unlockedAt })
     }

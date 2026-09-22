@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ConsentSheet, ParticipantIdIssued } from '../components/ConsentSheet'
 import { FloatingShapes } from '../components/Decor'
 import { SpeciesPicker } from '../components/Overlays'
 import { Button, Card, SectionTitle, TextInput } from '../components/ui'
 import { RESEARCH_CONTACT_EMAIL } from '../lib/consent'
+import { PUSH_CONFIGURED, disablePush, enablePush, pushState } from '../lib/notifications'
+import type { PushState } from '../lib/notifications'
 import { surveyUrlFor } from '../lib/survey'
 import { HAPTIC, accentAt, haptic } from '../lib/design'
 import type { EnrolmentStatus } from '../lib/types'
@@ -40,6 +42,25 @@ export function Settings() {
   const [claimError, setClaimError] = useState<string | undefined>(undefined)
   const [showSheet, setShowSheet] = useState(false)
   const [confirmWithdraw, setConfirmWithdraw] = useState(false)
+  const [push, setPush] = useState<PushState>('unsupported')
+  const [pushBusy, setPushBusy] = useState(false)
+
+  useEffect(() => {
+    void pushState().then(setPush)
+  }, [])
+
+  async function togglePush() {
+    if (!profile) return
+    setPushBusy(true)
+    if (push === 'granted') {
+      await disablePush(profile.uid)
+      setPush('default')
+    } else {
+      const ok = await enablePush(profile.uid)
+      setPush(ok ? 'granted' : ((Notification.permission as PushState) ?? 'denied'))
+    }
+    setPushBusy(false)
+  }
 
   const enrolment = profile?.enrolment
   const status: EnrolmentStatus = enrolment?.status ?? 'undecided'
@@ -293,6 +314,75 @@ export function Settings() {
             onContinue={() => setShowSheet(false)}
           />
         )}
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle accent={4}>การแจ้งเตือน</SectionTitle>
+        <Card accent={4}>
+          <p className="text-sm leading-snug text-white/75">
+            เปิดไว้เพื่อให้เตือนเมื่อสัตว์เลี้ยงหิวหรือป่วย
+            จะได้ไม่ปล่อยจนอ่อนแอโดยไม่รู้ตัว
+          </p>
+
+          {push === 'granted' ? (
+            <>
+              <p className="mt-3 text-xs font-black" style={{ color: '#00F5D4' }}>
+                ✅ เปิดการแจ้งเตือนแล้ว
+              </p>
+              <div className="mt-3">
+                <Button
+                  accent={4}
+                  variant="ghost"
+                  className="w-full"
+                  disabled={pushBusy}
+                  onClick={() => void togglePush()}
+                >
+                  ปิดการแจ้งเตือน
+                </Button>
+              </div>
+            </>
+          ) : push === 'denied' ? (
+            <p
+              className="mt-3 rounded-xl border-2 border-dashed px-3 py-2 text-xs leading-relaxed font-bold"
+              style={{ borderColor: '#FF6B35', color: '#FF6B35' }}
+            >
+              เบราว์เซอร์ถูกตั้งค่าให้บล็อกการแจ้งเตือนของเว็บนี้ไว้
+              ต้องไปเปิดในการตั้งค่าเบราว์เซอร์เอง
+            </p>
+          ) : push === 'unsupported' ? (
+            <p className="mt-3 text-xs leading-relaxed text-white/55">
+              เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน
+              (บน iPhone ต้องกด "เพิ่มลงหน้าจอโฮม" ก่อน จึงจะใช้ได้)
+            </p>
+          ) : push === 'unconfigured' ? (
+            <p
+              className="mt-3 rounded-xl border-2 border-dashed px-3 py-2 text-xs leading-relaxed font-bold"
+              style={{ borderColor: '#FFE600', color: '#FFE600' }}
+            >
+              ⚠️ ทีมพัฒนา: ยังไม่ได้ใส่ VAPID key ใน web/.env
+              ระบบแจ้งเตือนจึงยังปิดอยู่
+            </p>
+          ) : (
+            <div className="mt-4">
+              <Button
+                accent={4}
+                className="w-full py-4"
+                disabled={pushBusy}
+                vibrate={HAPTIC.success}
+                onClick={() => void togglePush()}
+              >
+                {pushBusy ? 'กำลังเปิด…' : '🔔 เปิดการแจ้งเตือน'}
+              </Button>
+            </div>
+          )}
+
+          {PUSH_CONFIGURED && push !== 'denied' && push !== 'unsupported' && (
+            <p className="mt-3 text-[11px] leading-relaxed text-white/45">
+              ระบบจะเตือนอย่างมากวันละครั้ง เฉพาะตอนที่สัตว์เลี้ยงต้องการการดูแลจริง ๆ
+              ไม่ส่งข้อความโฆษณาหรือชวนให้เปิดแอปโดยไม่จำเป็น
+            </p>
+          )}
+        </Card>
       </section>
 
       <section className="space-y-3">

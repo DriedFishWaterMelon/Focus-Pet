@@ -226,6 +226,27 @@ function hoursAtZero(startValue: number, ratePerHour: number, elapsedHours: numb
   return Math.max(0, elapsedHours - hoursUntilEmpty)
 }
 
+/** Hunger below this reads as hungry, both for mood and for reminders. */
+export const HUNGRY_THRESHOLD = 30
+
+/**
+ * When this pet will next need attention, as a timestamp.
+ *
+ * Computed here and stored on the pet so the reminder script does not have to
+ * re-implement the decay maths. Duplicating it there would mean two copies of
+ * the rules that decide when a participant gets nudged, and they would drift.
+ *
+ * Returns null for a pet that already needs attention or is dead — there is
+ * nothing to schedule in either case.
+ */
+export function nextAttentionAt(pet: Pet, now: number = Date.now()): number | null {
+  if (!pet.isAlive) return null
+  if (pet.hunger < HUNGRY_THRESHOLD || pet.health < SICK_THRESHOLD) return null
+
+  const hoursUntilHungry = (pet.hunger - HUNGRY_THRESHOLD) / DECAY_PER_HOUR.hunger
+  return now + hoursUntilHungry * 3_600_000
+}
+
 /** Hours of total neglect before this pet would die, from its current state. */
 export function hoursUntilDeath(pet: Pet): number {
   if (!pet.isAlive) return 0

@@ -1,4 +1,12 @@
 node_modules
-serviceAccount.json
-*-serviceAccount.json
 export/
+
+# Service account keys — full admin access to the database.
+# Every plausible name, because Firebase Console downloads them with a
+# generated filename like focus-pet-g8-firebase-adminsdk-fbsvc-1f760333e0.json
+# and one that slips past this list ends up in git history.
+serviceAccount.json
+*serviceAccount*.json
+*service-account*.json
+*adminsdk*.json
+*-firebase-*.json
