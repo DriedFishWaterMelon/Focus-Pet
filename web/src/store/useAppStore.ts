@@ -24,6 +24,7 @@ import {
   playWithPet,
 } from '../lib/gameLogic'
 import { publishAttentionSchedule } from '../lib/notifications'
+import { recordAction, resetVisit } from '../lib/telemetry'
 import { logSession } from '../lib/research'
 import {
   claimParticipantId,
@@ -194,6 +195,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   logOut: async () => {
+    resetVisit()
     await signOut(auth)
     set({
       profile: null,
@@ -379,8 +381,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ isFocusActive: false, remainingSeconds: targetMinutes * 60, elapsedSeconds: 0 })
 
-    // Matches the Android app: sessions under 2 minutes earn nothing.
-    if (elapsedMinutes < 2) return
+    // Matches the Android app: sessions under 2 minutes earn nothing. They are
+    // still recorded, because an attempt that was given up on says something
+    // about how hard a target was — discarding them hid every failure.
+    if (elapsedMinutes < 2) {
+      if (profile && isEnrolled(profile.enrolment)) {
+        await logSession(profile.uid, {
+          targetMinutes: sessionMode === 'free' ? 0 : targetMinutes,
+          actualMinutes: elapsedMinutes,
+          startTime: Date.now() - elapsedMinutes * 60 * 1000,
+          endTime: Date.now(),
+          completed: false,
+          abandoned: true,
+          expEarned: 0,
+          coinsEarned: 0,
+          itemRewardName: null,
+          tag: selectedTag,
+          source: leftTabDuringSession ? 'web_timer_interrupted' : 'web_timer_verified',
+          mode: sessionMode,
+        })
+      }
+      return
+    }
 
     const source: SessionSource = leftTabDuringSession
       ? 'web_timer_interrupted'
@@ -501,6 +523,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         .filter((i) => i.quantity > 0),
     )
     await get().persistPet(updated)
+    recordAction('feed')
     get().pushToast(`${updated.name} กิน${item.name}แล้ว`, 'success')
   },
 
@@ -508,6 +531,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updated = playWithPet(get().pet)
     if (!updated) return
     await get().persistPet(updated)
+    recordAction('pat')
   },
 
   purchase: async (itemId) => {
@@ -518,6 +542,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     await get().persistInventory(result.inventory)
     await get().persistPet(result.pet)
+    recordAction('purchase')
     get().pushToast('ซื้อสำเร็จ', 'success')
   },
 

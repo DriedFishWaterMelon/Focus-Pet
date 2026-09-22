@@ -22,6 +22,10 @@ firebase.initializeApp({
 
 var messaging = firebase.messaging()
 
+// Opens carrying this marker are recorded as reminder-driven. The page strips
+// it from the address bar once read, so it cannot leak into later visits.
+var NOTIFICATION_URL = '/?from=notification'
+
 messaging.onBackgroundMessage(function (payload) {
   var title = (payload.notification && payload.notification.title) || 'Focus Pet'
   var body = (payload.notification && payload.notification.body) || ''
@@ -34,7 +38,7 @@ messaging.onBackgroundMessage(function (payload) {
     // stacking up into a wall of identical notifications after a long absence.
     tag: (payload.data && payload.data.tag) || 'focus-pet-reminder',
     renotify: true,
-    data: { url: '/' },
+    data: { url: NOTIFICATION_URL },
   })
 })
 
@@ -43,9 +47,16 @@ self.addEventListener('notificationclick', function (event) {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
       for (var i = 0; i < list.length; i++) {
-        if ('focus' in list[i]) return list[i].focus()
+        if ('focus' in list[i]) {
+          // A tab is already open, so focusing it does not change its URL and
+          // the marker in NOTIFICATION_URL would never be seen. Tell the page
+          // directly instead, so the research data can distinguish an open the
+          // reminder caused from one the participant started themselves.
+          list[i].postMessage({ type: 'focus-pet-notification-open' })
+          return list[i].focus()
+        }
       }
-      if (self.clients.openWindow) return self.clients.openWindow('/')
+      if (self.clients.openWindow) return self.clients.openWindow(NOTIFICATION_URL)
     }),
   )
 })

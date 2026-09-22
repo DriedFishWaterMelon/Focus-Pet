@@ -194,7 +194,7 @@ async function main() {
         notification: { title: message.title, body: message.body },
         data: { tag: message.tag },
         webpush: {
-          fcmOptions: { link: 'https://focus-pet-g8.web.app/' },
+          fcmOptions: { link: 'https://focus-pet-g8.web.app/?from=notification' },
         },
       })
       await pushSnap.ref.set({ lastRemindedAt: now }, { merge: true })

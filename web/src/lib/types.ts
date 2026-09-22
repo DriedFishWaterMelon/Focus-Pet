@@ -134,6 +134,11 @@ export interface ScreenFreeSession {
   startTime: number
   endTime: number
   completed: boolean
+  /**
+   * Stopped before the two-minute floor, so it earned nothing. Recorded anyway:
+   * an abandoned attempt is evidence about the target, not noise.
+   */
+  abandoned?: boolean
   expEarned: number
   coinsEarned: number
   itemRewardName: string | null
@@ -236,6 +241,23 @@ export function emptyEnrolment(): Enrolment {
 /** Research data may only be written while this is true. */
 export function isEnrolled(enrolment: Enrolment): boolean {
   return enrolment.status === 'consented'
+}
+
+/**
+ * Whether this participant agreed to the consent text currently shipping.
+ *
+ * Someone who consented to an earlier version agreed to an earlier list of what
+ * would be collected. Collecting the newer items from them would be gathering
+ * data they never agreed to, so anything added after their version stays off
+ * until they read and accept the update.
+ */
+export function acceptsConsentVersion(enrolment: Enrolment, current: string): boolean {
+  return isEnrolled(enrolment) && enrolment.consentVersion === current
+}
+
+/** True when an enrolled participant is on an older consent text. */
+export function needsReconsent(enrolment: Enrolment, current: string): boolean {
+  return isEnrolled(enrolment) && enrolment.consentVersion !== current
 }
 
 /** What happened to the pet while the app was closed, shown on the next open. */

@@ -124,6 +124,7 @@ async function main() {
   const sessionRows = []
   const screenTimeRows = []
   const surveyRows = []
+  const visitRows = []
   /** participantId -> date -> { screenTime, focusMinutes, sessions } */
   const daily = new Map()
 
@@ -150,11 +151,12 @@ async function main() {
 
     const pid = participantId || `UNENROLLED_${uid.slice(0, 8)}`
 
-    const [petSnap, sessionsSnap, daysSnap, surveysSnap] = await Promise.all([
+    const [petSnap, sessionsSnap, daysSnap, surveysSnap, visitsSnap] = await Promise.all([
       userDoc.ref.collection('state').doc('pet').get(),
       userDoc.ref.collection('sessions').orderBy('endTime', 'asc').get(),
       userDoc.ref.collection('screenTimeDays').orderBy('date', 'asc').get(),
       userDoc.ref.collection('surveys').get(),
+      userDoc.ref.collection('appVisits').orderBy('openedAt', 'asc').get(),
     ])
 
     const pet = petSnap.exists ? petSnap.data() : {}
@@ -169,6 +171,9 @@ async function main() {
           freeMinutes: 0,
           sessions: 0,
           interrupted: 0,
+          abandoned: 0,
+          visits: 0,
+          appMinutes: 0,
         })
       }
       return forPid.get(date)
@@ -186,6 +191,7 @@ async function main() {
         s.targetMinutes ?? '',
         s.actualMinutes ?? '',
         s.completed === true ? 1 : 0,
+        s.abandoned === true ? 1 : 0,
         s.expEarned ?? '',
         s.coinsEarned ?? '',
         s.itemRewardName ?? '',
@@ -198,7 +204,8 @@ async function main() {
       day.sessions++
       // Interrupted sessions are counted separately rather than dropped, so the
       // analysis can decide whether to include them instead of us deciding here.
-      if (s.source === 'web_timer_interrupted') day.interrupted++
+      if (s.abandoned === true) day.abandoned++
+      else if (s.source === 'web_timer_interrupted') day.interrupted++
       else {
         const minutes = Number(s.actualMinutes) || 0
         day.focusMinutes += minutes
@@ -219,6 +226,36 @@ async function main() {
         iso(d.recordedAt),
       ])
       ensureDay(d.date ?? doc.id).screenTime = d.minutes ?? ''
+    }
+
+    for (const doc of visitsSnap.docs) {
+      const v = doc.data()
+      const screens = v.screens ?? {}
+      const actions = v.actions ?? {}
+      visitRows.push([
+        pid,
+        uid,
+        doc.id,
+        iso(v.openedAt),
+        iso(v.lastSeenAt),
+        v.durationSeconds ?? '',
+        v.openedFrom ?? '',
+        v.closed === true ? 1 : 0,
+        screens.home ?? 0,
+        screens.focus ?? 0,
+        screens.shop ?? 0,
+        screens.stats ?? 0,
+        screens.inventory ?? 0,
+        screens.settings ?? 0,
+        actions.feed ?? 0,
+        actions.pat ?? 0,
+        actions.purchase ?? 0,
+        v.consentVersion ?? '',
+      ])
+
+      const day = ensureDay(dateKey(v.openedAt))
+      day.visits++
+      day.appMinutes += Math.round((Number(v.durationSeconds) || 0) / 60)
     }
 
     for (const doc of surveysSnap.docs) {
@@ -264,6 +301,9 @@ async function main() {
         v.freeMinutes,
         v.sessions,
         v.interrupted,
+        v.abandoned,
+        v.visits,
+        v.appMinutes,
       ])
     }
   }
@@ -285,7 +325,7 @@ async function main() {
     outDir,
     'sessions.csv',
     ['participant_id', 'uid', 'session_id', 'start_time_iso', 'end_time_iso', 'date',
-     'target_minutes', 'actual_minutes', 'completed', 'exp_earned', 'coins_earned',
+     'target_minutes', 'actual_minutes', 'completed', 'abandoned', 'exp_earned', 'coins_earned',
      'reward_item', 'tag', 'source', 'mode'],
     sessionRows,
   )
@@ -301,8 +341,19 @@ async function main() {
     outDir,
     'daily_summary.csv',
     ['participant_id', 'date', 'screen_time_minutes', 'focus_minutes', 'free_minutes',
-     'session_count', 'interrupted_count'],
+     'session_count', 'interrupted_count', 'abandoned_count', 'app_visits',
+     'app_minutes'],
     dailyRows,
+  )
+
+  writeCsv(
+    outDir,
+    'app_visits.csv',
+    ['participant_id', 'uid', 'visit_id', 'opened_at_iso', 'last_seen_at_iso',
+     'duration_seconds', 'opened_from', 'closed', 'screen_home', 'screen_focus',
+     'screen_shop', 'screen_stats', 'screen_inventory', 'screen_settings',
+     'action_feed', 'action_pat', 'action_purchase', 'consent_version'],
+    visitRows,
   )
 
   if (surveyRows.length > 0) {
@@ -337,7 +388,7 @@ async function main() {
   // Column positions in sessionRows, named rather than counted from the end:
   // `mode` was appended after `source`, and a "last column" shortcut silently
   // started reporting zero verified sessions the moment it was.
-  const SESSION_COL = { source: 13, mode: 14 }
+  const SESSION_COL = { abandoned: 9, source: 14, mode: 15 }
   const verified = sessionRows.filter((r) => r[SESSION_COL.source] === 'web_timer_verified').length
   const interrupted = sessionRows.filter(
     (r) => r[SESSION_COL.source] === 'web_timer_interrupted',
@@ -345,12 +396,26 @@ async function main() {
   console.log(`\nคุณภาพข้อมูลเซสชัน:`)
   console.log(`  จับเวลาบนเว็บ (เชื่อถือได้):  ${verified}`)
   console.log(`  ถูกขัดจังหวะ (ควรแยกวิเคราะห์): ${interrupted}`)
+  // Abandoned attempts earned nothing and are excluded from focus_minutes, so
+  // they are reported separately rather than left invisible: a high count means
+  // participants are setting targets they cannot keep, which is a finding.
+  const abandoned = sessionRows.filter((r) => r[SESSION_COL.abandoned] === 1).length
+  console.log(`  ยกเลิกก่อน 2 นาที (ไม่ได้รางวัล): ${abandoned}`)
   console.log(`  เวลาหน้าจอที่กรอกเอง:          ${screenTimeRows.length} วัน`)
 
   // Free and targeted sessions measure different things — one is a commitment
   // made in advance, the other time noticed afterwards — so the split is worth
   // seeing before anyone averages them together.
   const freeCount = sessionRows.filter((r) => r[SESSION_COL.mode] === 'free').length
+  if (visitRows.length > 0) {
+    const withVisits = new Set(visitRows.map((r) => r[0])).size
+    console.log(`\nการใช้งานแอป (เก็บเฉพาะผู้ยินยอมเวอร์ชันล่าสุด):`)
+    console.log(`  ครั้งที่เปิดแอปทั้งหมด: ${visitRows.length}`)
+    console.log(`  มาจากผู้เข้าร่วม:       ${withVisits} จาก ${participantRows.length} คน`)
+  } else {
+    console.log('\nยังไม่มีข้อมูลการใช้งานแอป (ไม่มีใครยินยอมเอกสารเวอร์ชันล่าสุด)')
+  }
+
   console.log(`\nโหมดจับเวลา:`)
   console.log(`  ตั้งเป้าหมาย: ${sessionRows.length - freeCount}`)
   console.log(`  อิสระ:        ${freeCount}\n`)

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { MeshBackdrop } from './components/Decor'
 import {
   AwayReportModal,
@@ -17,6 +17,7 @@ import { Shop } from './pages/Shop'
 import { Stats } from './pages/Stats'
 import { HAPTIC, accentAt, haptic, readableOn } from './lib/design'
 import { moodOf } from './lib/gameLogic'
+import { endVisit, flush, markNotificationOpen, recordScreen, startVisit } from './lib/telemetry'
 import { useAppStore } from './store/useAppStore'
 
 const NAV = [
@@ -30,8 +31,43 @@ const NAV = [
 
 export default function App() {
   const { profile, authLoading, listenToAuth, pet, tickDecay } = useAppStore()
+  const location = useLocation()
 
   useEffect(() => listenToAuth(), [listenToAuth])
+
+  // App-usage records. Starts when the participant is known and stops when the
+  // tab is hidden, which on a phone is what "closed the app" actually looks like.
+  useEffect(() => {
+    if (!profile) return
+    startVisit(profile.uid, profile.enrolment)
+
+    const onVisibility = () => {
+      if (document.hidden) void flush(true)
+      else startVisit(profile.uid, profile.enrolment)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', () => void flush(true))
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      void endVisit()
+    }
+  }, [profile])
+
+  useEffect(() => {
+    recordScreen(location.pathname)
+  }, [location.pathname])
+
+  // Tapping a reminder when a tab is already open focuses that tab rather than
+  // navigating it, so the service worker says so over postMessage instead.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'focus-pet-notification-open') markNotificationOpen()
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [])
 
   // Keep the pet decaying while the tab is open, and catch up immediately when
   // the tab is brought back to the foreground after being backgrounded.

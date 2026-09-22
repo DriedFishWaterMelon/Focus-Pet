@@ -31,6 +31,8 @@ export const paths = {
   push: (uid: string) => `users/${uid}/state/push`,
   sessions: (uid: string) => `users/${uid}/sessions`,
   screenTimeDays: (uid: string) => `users/${uid}/screenTimeDays`,
+  /** One document per visit to the app — see lib/telemetry.ts. */
+  appVisits: (uid: string) => `users/${uid}/appVisits`,
   surveys: (uid: string) => `users/${uid}/surveys`,
   /**
    * One document per claimed participant code, outside the per-user tree so a

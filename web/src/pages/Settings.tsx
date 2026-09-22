@@ -3,11 +3,12 @@ import { ConsentSheet, ParticipantIdIssued } from '../components/ConsentSheet'
 import { FloatingShapes } from '../components/Decor'
 import { SpeciesPicker } from '../components/Overlays'
 import { Button, Card, SectionTitle, TextInput } from '../components/ui'
-import { RESEARCH_CONTACT_EMAIL } from '../lib/consent'
+import { CONSENT_VERSION, RESEARCH_CONTACT_EMAIL } from '../lib/consent'
 import { PUSH_CONFIGURED, disablePush, enablePush, pushState } from '../lib/notifications'
 import type { PushState } from '../lib/notifications'
 import { surveyUrlFor } from '../lib/survey'
 import { HAPTIC, accentAt, accentTextAt, haptic } from '../lib/design'
+import { needsReconsent } from '../lib/types'
 import type { EnrolmentStatus } from '../lib/types'
 import { useAppStore } from '../store/useAppStore'
 
@@ -66,6 +67,7 @@ export function Settings() {
   const status: EnrolmentStatus = enrolment?.status ?? 'undecided'
   const idLocked = Boolean(enrolment?.participantIdSetAt)
   const needsId = status === 'consented' && !profile?.participantId
+  const outdatedConsent = enrolment ? needsReconsent(enrolment, CONSENT_VERSION) : false
   // Only offered once there is a code to prefill; see surveyUrlFor.
   const surveyUrl =
     status === 'consented' ? surveyUrlFor(profile?.participantId ?? '') : null
@@ -134,6 +136,29 @@ export function Settings() {
               {STATUS_LABEL[status]}
             </span>
           </div>
+
+          {outdatedConsent && (
+            <div
+              className="mt-4 rounded-2xl border-4 border-dashed p-3"
+              style={{ borderColor: '#FFE600' }}
+            >
+              <p className="text-sm font-black" style={{ color: '#FFE600' }}>
+                📄 เอกสารยินยอมมีฉบับใหม่
+              </p>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-white/80">
+                ฉบับใหม่เพิ่มการเก็บข้อมูลการใช้งานแอป เช่น จำนวนครั้งที่เปิดแอป
+                และหน้าที่เข้าใช้ <strong>ระบบจะยังไม่เก็บข้อมูลส่วนนี้ของท่าน</strong>{' '}
+                จนกว่าท่านจะอ่านและยินยอมฉบับใหม่ ข้อมูลเดิมยังเก็บตามที่ท่านยินยอมไว้
+              </p>
+              {!showSheet && (
+                <div className="mt-3">
+                  <Button accent={2} className="w-full" onClick={() => setShowSheet(true)}>
+                    อ่านฉบับใหม่
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {status === 'consented' && (
             <>
@@ -293,13 +318,14 @@ export function Settings() {
           </div>
         </Card>
 
-        {showSheet && status !== 'consented' && (
+        {showSheet && (status !== 'consented' || outdatedConsent) && (
           <ConsentSheet
             busy={claiming}
             onAgree={async () => {
               setClaiming(true)
               await giveConsent()
               setClaiming(false)
+              setShowSheet(false)
             }}
             onDecline={() => setShowSheet(false)}
           />

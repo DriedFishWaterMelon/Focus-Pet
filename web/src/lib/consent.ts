@@ -9,7 +9,16 @@
 // Fixing a typo does not need a bump; changing what data is collected, how long
 // it is kept, or who can see it always does.
 
-export const CONSENT_VERSION = '2026-09-21.v1'
+/**
+ * v2 added the app-usage records in section 3: how often the app is opened, how
+ * long each visit lasts, which screens are used, which care actions are taken,
+ * and screen-free attempts that were stopped before earning anything.
+ *
+ * Anyone who agreed to v1 is still held to v1: the new records are collected
+ * only from participants whose stored consentVersion matches this constant.
+ * See acceptsCurrentConsent().
+ */
+export const CONSENT_VERSION = '2026-09-22.v2'
 
 /**
  * Contact address shown on the consent sheet.
@@ -55,9 +64,20 @@ export const CONSENT_SHEET: ConsentSection[] = [
     heading: 'ระบบเก็บข้อมูลอะไรของท่านบ้าง',
     body: [
       'เวลาเริ่มและจบของแต่ละเซสชันปลอดหน้าจอ ระยะเวลา และประเภทกิจกรรมที่ท่านเลือก',
+      'รวมถึงเซสชันที่ท่านหยุดกลางคันก่อนได้รับรางวัล เพื่อให้ทราบว่าการตั้งเป้าหมายแบบใดทำสำเร็จยาก',
       'เวลาหน้าจอรายวันที่ท่านกรอกเข้ามาเอง',
       'สถานะในเกม เช่น เลเวล ความคืบหน้า และจำนวนวันที่ทำต่อเนื่อง',
+      'การใช้งานตัวแอปเอง ได้แก่ จำนวนครั้งที่เปิดแอป ระยะเวลาที่เปิดค้างไว้แต่ละครั้ง หน้าที่เข้าใช้ และจำนวนครั้งที่ให้อาหาร เล่นด้วย หรือซื้อไอเทม',
+      'ว่าท่านเปิดแอปจากการแตะการแจ้งเตือนหรือเปิดเอง',
       'รหัสผู้เข้าร่วมแบบนิรนามที่ระบบออกให้อัตโนมัติ ใช้จับคู่ข้อมูลในระบบกับคำตอบแบบสอบถาม ไม่ได้ผูกกับชื่อหรืออีเมลของท่าน',
+    ],
+  },
+  {
+    heading: 'ทำไมต้องเก็บข้อมูลการใช้งานแอป',
+    body: [
+      'เพื่อตอบคำถามว่ากลไกใดในแอปที่ช่วยให้ลดเวลาหน้าจอได้จริง ไม่ใช่เพียงว่าผู้ใช้ลดลงหรือไม่',
+      'ข้อมูลนี้เก็บเป็นจำนวนครั้งและระยะเวลารวมเท่านั้น ไม่มีการบันทึกว่าท่านกดอะไรทีละปุ่ม และไม่มีการบันทึกข้อความใด ๆ ที่ท่านพิมพ์',
+      'หากท่านไม่สะดวกให้เก็บข้อมูลส่วนนี้ สามารถเลือกไม่เข้าร่วมได้ และยังใช้งานแอปได้เต็มรูปแบบเหมือนเดิม',
     ],
   },
   {
