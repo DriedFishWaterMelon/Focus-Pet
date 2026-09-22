@@ -12,12 +12,14 @@ import {
   applyDecay,
   buyItem,
   completeFocusSession,
+  completeFreeSession,
   defaultInventory,
   defaultPet,
   feedPet,
   grantItem,
   hatchNewPet,
   itemIdForRewardName,
+  minutesToNextFreePoint,
   playWithPet,
 } from '../lib/gameLogic'
 import { logSession } from '../lib/research'
@@ -29,6 +31,7 @@ import {
   recordWithdrawal,
 } from '../lib/enrolment'
 import { isEnrolled } from '../lib/types'
+import type { SessionMode } from '../lib/types'
 import type {
   Achievement,
   AwayReport,
@@ -72,6 +75,10 @@ interface AppState {
   remainingSeconds: number
   selectedTag: string
   leftTabDuringSession: boolean
+  /** Which timer the Focus screen is set to. */
+  sessionMode: SessionMode
+  /** Seconds counted up so far in free mode. */
+  elapsedSeconds: number
 
   celebrations: Celebration[]
   toasts: Toast[]
@@ -89,12 +96,14 @@ interface AppState {
   completeOnboarding: (name: string, species: PetSpecies) => Promise<void>
   revivePet: (name: string, species: PetSpecies) => Promise<void>
 
+  setSessionMode: (mode: SessionMode) => void
   setTargetMinutes: (minutes: number) => void
   setSelectedTag: (tag: string) => void
   startFocus: () => void
   tickFocus: () => void
   markLeftTab: () => void
   endFocus: (completed: boolean) => Promise<void>
+  bankFreeSession: (minutes: number, tag: string, source: SessionSource) => Promise<void>
 
   feed: (item: InventoryItem) => Promise<void>
   pat: () => Promise<void>
@@ -132,6 +141,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   remainingSeconds: 25 * 60,
   selectedTag: 'Deep Work',
   leftTabDuringSession: false,
+  sessionMode: 'targeted',
+  elapsedSeconds: 0,
 
   celebrations: [],
   toasts: [],
@@ -299,6 +310,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().pushToast(`${fresh.name} ฟักออกมาแล้ว รุ่นที่ ${fresh.generation}`, 'success')
   },
 
+  setSessionMode: (mode) => {
+    if (get().isFocusActive) return
+    set({ sessionMode: mode, elapsedSeconds: 0 })
+  },
+
   setTargetMinutes: (minutes) => {
     if (get().isFocusActive) return
     set({ targetMinutes: minutes, remainingSeconds: minutes * 60 })
@@ -310,12 +326,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       isFocusActive: true,
       remainingSeconds: get().targetMinutes * 60,
+      elapsedSeconds: 0,
       leftTabDuringSession: false,
     }),
 
   tickFocus: () => {
-    const { remainingSeconds, isFocusActive } = get()
+    const { remainingSeconds, isFocusActive, sessionMode, elapsedSeconds } = get()
     if (!isFocusActive) return
+
+    // Free mode counts up and never ends on its own; the participant decides
+    // when they are done.
+    if (sessionMode === 'free') {
+      set({ elapsedSeconds: elapsedSeconds + 1 })
+      return
+    }
+
     if (remainingSeconds <= 1) {
       void get().endFocus(true)
       return
@@ -328,14 +353,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   endFocus: async (completed) => {
-    const { targetMinutes, remainingSeconds, selectedTag, pet, leftTabDuringSession, profile } =
-      get()
+    const {
+      targetMinutes,
+      remainingSeconds,
+      elapsedSeconds,
+      sessionMode,
+      selectedTag,
+      pet,
+      leftTabDuringSession,
+      profile,
+    } = get()
 
-    const elapsedMinutes = completed
-      ? targetMinutes
-      : Math.floor((targetMinutes * 60 - remainingSeconds) / 60)
+    const elapsedMinutes =
+      sessionMode === 'free'
+        ? Math.floor(elapsedSeconds / 60)
+        : completed
+          ? targetMinutes
+          : Math.floor((targetMinutes * 60 - remainingSeconds) / 60)
 
-    set({ isFocusActive: false, remainingSeconds: targetMinutes * 60 })
+    set({ isFocusActive: false, remainingSeconds: targetMinutes * 60, elapsedSeconds: 0 })
 
     // Matches the Android app: sessions under 2 minutes earn nothing.
     if (elapsedMinutes < 2) return
@@ -343,6 +379,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const source: SessionSource = leftTabDuringSession
       ? 'web_timer_interrupted'
       : 'web_timer_verified'
+
+    if (sessionMode === 'free') {
+      await get().bankFreeSession(elapsedMinutes, selectedTag, source)
+      return
+    }
 
     const outcome = completeFocusSession(pet, targetMinutes, elapsedMinutes, selectedTag, source)
 
@@ -386,6 +427,57 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Nothing is logged unless the person is actively enrolled. Someone who
     // declined, withdrew, or has not answered the consent sheet still gets the
     // full game; their behaviour simply never enters the dataset.
+    if (profile && isEnrolled(profile.enrolment)) {
+      await logSession(profile.uid, outcome.session)
+    }
+  },
+
+  /**
+   * Banks an open-ended session and celebrates only when points actually landed.
+   *
+   * A free session shorter than the remaining minutes of the current point pays
+   * nothing on its own, but the time is still added to the lifetime total and
+   * counts toward the next one — so the toast says the minutes were kept rather
+   * than going silent, which would read as the app losing them.
+   */
+  bankFreeSession: async (minutes, tag, source) => {
+    const outcome = completeFreeSession(get().pet, minutes, tag, source)
+    await get().persistPet(outcome.pet)
+
+    const queued: Celebration[] = []
+
+    if (outcome.pointsEarned > 0) {
+      queued.push({
+        kind: 'session',
+        session: outcome.session,
+        title: `ได้ ${outcome.pointsEarned} แต้ม!`,
+        detail: `ปลอดหน้าจอไป ${minutes} นาที`,
+        emoji: '⭐',
+      })
+    } else {
+      const left = minutesToNextFreePoint(outcome.pet.freeMinutesTotal)
+      get().pushToast(`เก็บ ${minutes} นาทีแล้ว · อีก ${left} นาทีได้ 1 แต้ม`, 'info')
+    }
+
+    if (outcome.leveledUp) {
+      queued.push({
+        kind: 'levelUp',
+        title: 'เลเวลอัป!',
+        detail: `${outcome.pet.name} ขึ้นเป็นเลเวล ${outcome.pet.level} แล้ว`,
+        emoji: '⬆️',
+      })
+    }
+    if (outcome.evolved) {
+      queued.push({
+        kind: 'evolution',
+        title: 'เติบโตแล้ว!',
+        detail: `${outcome.pet.name} เปลี่ยนร่างเป็นขั้นใหม่`,
+        emoji: '🌟',
+      })
+    }
+    if (queued.length > 0) set((state) => ({ celebrations: [...state.celebrations, ...queued] }))
+
+    const profile = get().profile
     if (profile && isEnrolled(profile.enrolment)) {
       await logSession(profile.uid, outcome.session)
     }

@@ -163,7 +163,13 @@ async function main() {
       if (!daily.has(pid)) daily.set(pid, new Map())
       const forPid = daily.get(pid)
       if (!forPid.has(date)) {
-        forPid.set(date, { screenTime: '', focusMinutes: 0, sessions: 0, interrupted: 0 })
+        forPid.set(date, {
+          screenTime: '',
+          focusMinutes: 0,
+          freeMinutes: 0,
+          sessions: 0,
+          interrupted: 0,
+        })
       }
       return forPid.get(date)
     }
@@ -185,6 +191,7 @@ async function main() {
         s.itemRewardName ?? '',
         s.tag ?? '',
         s.source ?? '',
+        s.mode ?? 'targeted',
       ])
 
       const day = ensureDay(dateKey(s.endTime))
@@ -192,7 +199,13 @@ async function main() {
       // Interrupted sessions are counted separately rather than dropped, so the
       // analysis can decide whether to include them instead of us deciding here.
       if (s.source === 'web_timer_interrupted') day.interrupted++
-      else day.focusMinutes += Number(s.actualMinutes) || 0
+      else {
+        const minutes = Number(s.actualMinutes) || 0
+        day.focusMinutes += minutes
+        // Free minutes are counted inside focusMinutes and also broken out, so
+        // the analysis can look at committed time alone by subtracting.
+        if (s.mode === 'free') day.freeMinutes += minutes
+      }
     }
 
     for (const doc of daysSnap.docs) {
@@ -227,6 +240,8 @@ async function main() {
       pet.generation ?? '',
       pet.level ?? '',
       pet.totalFocusMinutes ?? '',
+      pet.freeMinutesTotal ?? 0,
+      pet.freePointsAwarded ?? 0,
       pet.streakDays ?? '',
       pet.isAlive === false ? 0 : 1,
       iso(pet.diedAt),
@@ -241,7 +256,15 @@ async function main() {
   for (const [pid, dates] of [...daily.entries()].sort()) {
     for (const [date, v] of [...dates.entries()].sort()) {
       if (!date) continue
-      dailyRows.push([pid, date, v.screenTime, v.focusMinutes, v.sessions, v.interrupted])
+      dailyRows.push([
+        pid,
+        date,
+        v.screenTime,
+        v.focusMinutes,
+        v.freeMinutes,
+        v.sessions,
+        v.interrupted,
+      ])
     }
   }
 
@@ -252,7 +275,8 @@ async function main() {
     'participants.csv',
     ['participant_id', 'uid', 'onboarded', 'enrolment_status', 'consent_version',
      'consented_at', 'participant_id_set_at', 'withdrawn_at', 'pet_name', 'pet_species',
-     'pet_generation', 'pet_level', 'total_focus_minutes', 'streak_days', 'pet_alive',
+     'pet_generation', 'pet_level', 'total_focus_minutes', 'free_minutes_total',
+     'free_points_awarded', 'streak_days', 'pet_alive',
      'pet_died_at', 'pet_born_at', 'session_count', 'screentime_day_count'],
     participantRows,
   )
@@ -262,7 +286,7 @@ async function main() {
     'sessions.csv',
     ['participant_id', 'uid', 'session_id', 'start_time_iso', 'end_time_iso', 'date',
      'target_minutes', 'actual_minutes', 'completed', 'exp_earned', 'coins_earned',
-     'reward_item', 'tag', 'source'],
+     'reward_item', 'tag', 'source', 'mode'],
     sessionRows,
   )
 
@@ -276,8 +300,8 @@ async function main() {
   writeCsv(
     outDir,
     'daily_summary.csv',
-    ['participant_id', 'date', 'screen_time_minutes', 'focus_minutes', 'session_count',
-     'interrupted_count'],
+    ['participant_id', 'date', 'screen_time_minutes', 'focus_minutes', 'free_minutes',
+     'session_count', 'interrupted_count'],
     dailyRows,
   )
 
@@ -310,14 +334,26 @@ async function main() {
 
   // A dataset with no verified sessions usually means participants are only
   // self-reporting, which changes how the results must be written up.
-  // sessionRows keeps its own shape; source is its last column either way.
-  const sourceOf = (row) => row[row.length - 1]
-  const verified = sessionRows.filter((r) => sourceOf(r) === 'web_timer_verified').length
-  const interrupted = sessionRows.filter((r) => sourceOf(r) === 'web_timer_interrupted').length
+  // Column positions in sessionRows, named rather than counted from the end:
+  // `mode` was appended after `source`, and a "last column" shortcut silently
+  // started reporting zero verified sessions the moment it was.
+  const SESSION_COL = { source: 13, mode: 14 }
+  const verified = sessionRows.filter((r) => r[SESSION_COL.source] === 'web_timer_verified').length
+  const interrupted = sessionRows.filter(
+    (r) => r[SESSION_COL.source] === 'web_timer_interrupted',
+  ).length
   console.log(`\nคุณภาพข้อมูลเซสชัน:`)
   console.log(`  จับเวลาบนเว็บ (เชื่อถือได้):  ${verified}`)
   console.log(`  ถูกขัดจังหวะ (ควรแยกวิเคราะห์): ${interrupted}`)
-  console.log(`  เวลาหน้าจอที่กรอกเอง:          ${screenTimeRows.length} วัน\n`)
+  console.log(`  เวลาหน้าจอที่กรอกเอง:          ${screenTimeRows.length} วัน`)
+
+  // Free and targeted sessions measure different things — one is a commitment
+  // made in advance, the other time noticed afterwards — so the split is worth
+  // seeing before anyone averages them together.
+  const freeCount = sessionRows.filter((r) => r[SESSION_COL.mode] === 'free').length
+  console.log(`\nโหมดจับเวลา:`)
+  console.log(`  ตั้งเป้าหมาย: ${sessionRows.length - freeCount}`)
+  console.log(`  อิสระ:        ${freeCount}\n`)
 }
 
 main().catch((error) => {

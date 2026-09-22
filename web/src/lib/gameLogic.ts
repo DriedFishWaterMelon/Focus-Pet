@@ -135,6 +135,8 @@ export function defaultPet(overrides: Partial<Pet> = {}): Pet {
     stage: 'BABY',
     totalFocusMinutes: 0,
     streakDays: 0,
+    freeMinutesTotal: 0,
+    freePointsAwarded: 0,
     lastSessionDate: '',
     coins: 150,
     lastTickAt: now,
@@ -300,6 +302,7 @@ export function completeFocusSession(
     itemRewardName: rewardItemFor(actualMinutes),
     tag,
     source,
+    mode: 'targeted',
   }
 
   const newExp = currentPet.exp + expEarned
@@ -325,6 +328,118 @@ export function completeFocusSession(
   return {
     session,
     pet,
+    leveledUp: newLevel > currentPet.level,
+    evolved: newStage !== currentPet.stage,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Free mode
+// ---------------------------------------------------------------------------
+
+/** Minutes of open-ended screen-free time that earn one point. */
+export const FREE_MINUTES_PER_POINT = 10
+
+/**
+ * What one free point pays.
+ *
+ * Deliberately the base rate for ten minutes with no completion bonus, because
+ * free mode has no target to complete. Ten minutes of a targeted session pays
+ * 20 EXP plus a 20 bonus; ten minutes of free time pays the 20 alone. Free mode
+ * is therefore never the better deal, which keeps committing to a goal worth
+ * doing while still rewarding time the participant only noticed afterwards.
+ */
+export const FREE_POINT_EXP = FREE_MINUTES_PER_POINT * 2
+export const FREE_POINT_COINS = coinsForSession(FREE_MINUTES_PER_POINT)
+
+/** Total points a lifetime of banked free minutes is worth. */
+export function freePointsFor(totalMinutes: number): number {
+  return Math.floor(totalMinutes / FREE_MINUTES_PER_POINT)
+}
+
+/** Minutes counted toward the point currently being earned. */
+export function freeProgressMinutes(totalMinutes: number): number {
+  return Math.floor(totalMinutes) % FREE_MINUTES_PER_POINT
+}
+
+/** Minutes still needed for the next point. */
+export function minutesToNextFreePoint(totalMinutes: number): number {
+  return FREE_MINUTES_PER_POINT - freeProgressMinutes(totalMinutes)
+}
+
+export interface FreeSessionOutcome {
+  session: Omit<ScreenFreeSession, 'id'>
+  pet: Pet
+  /** Points granted by this session. Zero when it did not cross a ten-minute mark. */
+  pointsEarned: number
+  leveledUp: boolean
+  evolved: boolean
+}
+
+/**
+ * Banks an open-ended session.
+ *
+ * Points are computed from the lifetime total rather than from this session
+ * alone, so seven minutes today and four tomorrow still pay out. Time is never
+ * rounded away just because one sitting fell short of ten minutes — which is
+ * the whole point of a mode you can start without committing to a target.
+ */
+export function completeFreeSession(
+  currentPet: Pet,
+  actualMinutes: number,
+  tag: string,
+  source: SessionSource,
+  now: number = Date.now(),
+): FreeSessionOutcome {
+  const bankedTotal = currentPet.freeMinutesTotal + actualMinutes
+  const pointsEarned = Math.max(0, freePointsFor(bankedTotal) - currentPet.freePointsAwarded)
+
+  const expEarned = pointsEarned * FREE_POINT_EXP
+  const coinsEarned = pointsEarned * FREE_POINT_COINS
+  const todayIso = toIsoDate(now)
+
+  const session: Omit<ScreenFreeSession, 'id'> = {
+    targetMinutes: 0,
+    actualMinutes,
+    startTime: now - actualMinutes * 60 * 1000,
+    endTime: now,
+    // There is no target, so "completed" has no meaning here. It stays false
+    // and the analysis should read `mode` instead of inferring from it.
+    completed: false,
+    expEarned,
+    coinsEarned,
+    itemRewardName: null,
+    tag,
+    source,
+    mode: 'free',
+  }
+
+  const newExp = currentPet.exp + expEarned
+  const newLevel = levelFromExp(newExp)
+  const newStage = stageFromLevel(newLevel)
+
+  const pet: Pet = {
+    ...currentPet,
+    totalFocusMinutes: currentPet.totalFocusMinutes + actualMinutes,
+    freeMinutesTotal: bankedTotal,
+    freePointsAwarded: currentPet.freePointsAwarded + pointsEarned,
+    exp: newExp,
+    level: newLevel,
+    stage: newStage,
+    // Smaller than a targeted session's +20/+15: the same inversion, scaled to
+    // the lighter commitment.
+    happiness: clamp(currentPet.happiness + 10),
+    energy: clamp(currentPet.energy + 8),
+    coins: currentPet.coins + coinsEarned,
+    streakDays: nextStreak(currentPet, todayIso),
+    lastSessionDate: todayIso,
+    lastFocusTimestamp: now,
+  }
+
+  return {
+    session,
+    pet,
+    pointsEarned,
     leveledUp: newLevel > currentPet.level,
     evolved: newStage !== currentPet.stage,
   }

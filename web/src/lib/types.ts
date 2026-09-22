@@ -106,6 +106,13 @@ export interface Pet {
   stage: PetStage
   totalFocusMinutes: number
   streakDays: number
+  /**
+   * Every minute ever banked in free mode. Points are derived from this rather
+   * than stored separately, so the running total and the points cannot disagree.
+   */
+  freeMinutesTotal: number
+  /** Points already paid out, so the same minutes are never paid for twice. */
+  freePointsAwarded: number
   /** ISO date (YYYY-MM-DD) of the most recent completed session, for the streak. */
   lastSessionDate: string
   coins: number
@@ -133,7 +140,15 @@ export interface ScreenFreeSession {
   tag: string
   /** How the duration was established. Critical for research validity. */
   source: SessionSource
+  /**
+   * Which timer produced this session. The analysis has to be able to separate
+   * them: a targeted session is a commitment made in advance, a free one is
+   * time noticed after the fact, and averaging the two hides that difference.
+   */
+  mode: SessionMode
 }
+
+export type SessionMode = 'targeted' | 'free'
 
 /**
  * Where a session's minutes came from. The research analysis must be able to tell

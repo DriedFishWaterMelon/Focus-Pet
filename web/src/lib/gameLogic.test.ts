@@ -5,15 +5,21 @@ import {
   applyDecay,
   buyItem,
   coinsForSession,
+  FREE_MINUTES_PER_POINT,
+  FREE_POINT_EXP,
   completeFocusSession,
+  completeFreeSession,
   daysBetween,
   defaultInventory,
   defaultPet,
   expForSession,
   feedPet,
+  freePointsFor,
+  freeProgressMinutes,
   hatchNewPet,
   hoursUntilDeath,
   levelFromExp,
+  minutesToNextFreePoint,
   moodOf,
   nextStreak,
   playWithPet,
@@ -295,5 +301,79 @@ describe('mood', () => {
     expect(moodOf(defaultPet({ health: 100, hunger: 80, energy: 80, happiness: 85 }))).toBe(
       'ECSTATIC',
     )
+  })
+})
+
+describe('free mode', () => {
+  it('pays one point per ten banked minutes', () => {
+    expect(freePointsFor(0)).toBe(0)
+    expect(freePointsFor(9)).toBe(0)
+    expect(freePointsFor(10)).toBe(1)
+    expect(freePointsFor(23.42)).toBe(2)
+  })
+
+  it('reports progress toward the next point', () => {
+    // Matches the readout the tester asked for: 23.42 banked reads as 3/10
+    // with 7 minutes to go.
+    expect(freeProgressMinutes(23.42)).toBe(3)
+    expect(minutesToNextFreePoint(23.42)).toBe(7)
+    expect(freeProgressMinutes(10)).toBe(0)
+    expect(minutesToNextFreePoint(10)).toBe(10)
+  })
+
+  it('carries leftover minutes across sessions instead of discarding them', () => {
+    // Seven minutes then four minutes must pay a point. Rounding each session
+    // down on its own would silently throw the time away.
+    let pet = defaultPet()
+    const first = completeFreeSession(pet, 7, 'Study', 'web_timer_verified')
+    expect(first.pointsEarned).toBe(0)
+    expect(first.pet.freeMinutesTotal).toBe(7)
+
+    pet = first.pet
+    const second = completeFreeSession(pet, 4, 'Study', 'web_timer_verified')
+    expect(second.pointsEarned).toBe(1)
+    expect(second.pet.freeMinutesTotal).toBe(11)
+  })
+
+  it('never pays for the same minutes twice', () => {
+    const pet = defaultPet({ freeMinutesTotal: 25, freePointsAwarded: 2 })
+    const outcome = completeFreeSession(pet, 3, 'Study', 'web_timer_verified')
+    expect(outcome.pointsEarned).toBe(0)
+    expect(outcome.pet.freePointsAwarded).toBe(2)
+  })
+
+  it('pays several points at once for a long session', () => {
+    const outcome = completeFreeSession(defaultPet(), 35, 'Study', 'web_timer_verified')
+    expect(outcome.pointsEarned).toBe(3)
+    expect(outcome.pet.exp).toBe(defaultPet().exp + 3 * FREE_POINT_EXP)
+  })
+
+  it('is never a better deal than committing to a target', () => {
+    // Ten minutes free pays the base rate; ten minutes against a met target
+    // also pays the completion bonus. If this inverts, nobody would ever set
+    // a goal again.
+    const freeExp = FREE_POINT_EXP
+    const targetedExp = expForSession(FREE_MINUTES_PER_POINT, FREE_MINUTES_PER_POINT)
+    expect(targetedExp).toBeGreaterThan(freeExp)
+  })
+
+  it('tags the session so the analysis can separate the two timers', () => {
+    const free = completeFreeSession(defaultPet(), 12, 'Study', 'web_timer_verified')
+    expect(free.session.mode).toBe('free')
+    expect(free.session.targetMinutes).toBe(0)
+
+    const targeted = completeFocusSession(defaultPet(), 25, 25, 'Study', 'web_timer_verified')
+    expect(targeted.session.mode).toBe('targeted')
+  })
+
+  it('still records the source, so an interrupted free session is flagged', () => {
+    const outcome = completeFreeSession(defaultPet(), 12, 'Study', 'web_timer_interrupted')
+    expect(outcome.session.source).toBe('web_timer_interrupted')
+  })
+
+  it('counts toward total focus minutes and the daily streak', () => {
+    const outcome = completeFreeSession(defaultPet(), 12, 'Study', 'web_timer_verified')
+    expect(outcome.pet.totalFocusMinutes).toBe(12)
+    expect(outcome.pet.streakDays).toBe(1)
   })
 })

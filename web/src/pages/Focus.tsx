@@ -3,6 +3,12 @@ import { BackgroundWord, FloatingShapes } from '../components/Decor'
 import { PetCanvas } from '../components/PetCanvas'
 import { Button, Card, Chip, SectionTitle } from '../components/ui'
 import { HAPTIC, accentAt } from '../lib/design'
+import {
+  FREE_MINUTES_PER_POINT,
+  freePointsFor,
+  freeProgressMinutes,
+  minutesToNextFreePoint,
+} from '../lib/gameLogic'
 import { useAppStore } from '../store/useAppStore'
 
 const PRESETS = [15, 25, 30, 45, 60]
@@ -29,8 +35,11 @@ export function Focus() {
     isFocusActive,
     targetMinutes,
     remainingSeconds,
+    elapsedSeconds,
+    sessionMode,
     selectedTag,
     leftTabDuringSession,
+    setSessionMode,
     setTargetMinutes,
     setSelectedTag,
     startFocus,
@@ -73,7 +82,17 @@ export function Focus() {
     }
   }, [isFocusActive])
 
-  const progress = isFocusActive ? 1 - remainingSeconds / (targetMinutes * 60) : 0
+  const free = sessionMode === 'free'
+
+  // In free mode the ring shows progress toward the next point rather than
+  // toward an end time, because there is no end time to show.
+  const bankedNow = pet.freeMinutesTotal + Math.floor(elapsedSeconds / 60)
+  const pointProgress = freeProgressMinutes(bankedNow) / FREE_MINUTES_PER_POINT
+  const progress = free
+    ? pointProgress
+    : isFocusActive
+      ? 1 - remainingSeconds / (targetMinutes * 60)
+      : 0
   const circumference = 2 * Math.PI * 92
 
   return (
@@ -104,13 +123,13 @@ export function Focus() {
           <div className="relative">
             <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full -rotate-90">
               <circle cx="100" cy="100" r="92" fill="none" stroke="#2D1B4E" strokeWidth="6" />
-              {isFocusActive && (
+              {(isFocusActive || free) && (
                 <circle
                   cx="100"
                   cy="100"
                   r="92"
                   fill="none"
-                  stroke="#00F5D4"
+                  stroke={free ? "#FFE600" : "#00F5D4"}
                   strokeWidth="6"
                   strokeLinecap="round"
                   strokeDasharray={circumference}
@@ -130,10 +149,16 @@ export function Focus() {
               letterSpacing: '-0.04em',
             }}
           >
-            {formatClock(remainingSeconds)}
+            {formatClock(free ? elapsedSeconds : remainingSeconds)}
           </p>
           <p className="mt-1 text-xs font-bold tracking-widest text-white/50 uppercase">
-            {isFocusActive ? `${selectedTag} · วางมือถือลง` : `เป้าหมาย ${targetMinutes} นาที`}
+            {free
+              ? isFocusActive
+                ? `${selectedTag} · นับขึ้นเรื่อย ๆ`
+                : 'โหมดอิสระ · ไม่มีเป้าหมาย'
+              : isFocusActive
+                ? `${selectedTag} · วางมือถือลง`
+                : `เป้าหมาย ${targetMinutes} นาที`}
           </p>
 
           {isFocusActive && leftTabDuringSession && (
@@ -147,8 +172,74 @@ export function Focus() {
         </div>
       </div>
 
+      {/* The points readout stays visible during a free session — watching the
+          remaining minutes fall is the only progress signal there is when the
+          clock counts up and nothing is due to happen at a fixed time. */}
+      {free && (
+        <div
+          className="rounded-3xl border-4 p-4 transition-all duration-1000"
+          style={{
+            borderColor: isFocusActive ? '#2D1B4E' : '#FFE600',
+            background: isFocusActive ? 'rgba(13,13,26,0.6)' : '#FFE6001A',
+          }}
+        >
+          <div className="flex items-baseline justify-between">
+            <span className="text-[10px] font-black tracking-widest text-white/60 uppercase">
+              แต้มสะสม
+            </span>
+            <span
+              className="text-2xl font-black"
+              style={{ fontFamily: 'var(--font-display)', color: '#FFE600' }}
+            >
+              ⭐ {freePointsFor(bankedNow)}
+            </span>
+          </div>
+
+          <div
+            className="mt-3 h-3 overflow-hidden rounded-full border-2"
+            style={{ borderColor: '#FF3AF2', background: '#0D0D1A' }}
+          >
+            <div
+              className="h-full rounded-full transition-[width] duration-700"
+              style={{
+                width: `${pointProgress * 100}%`,
+                backgroundImage: 'linear-gradient(90deg, #FFE600, #FF6B35)',
+              }}
+            />
+          </div>
+
+          <p className="mt-2 text-center text-sm font-black" style={{ color: '#FFE600' }}>
+            {freeProgressMinutes(bankedNow)}/{FREE_MINUTES_PER_POINT} นาที ·
+            ปลอดจออีก {minutesToNextFreePoint(bankedNow)} นาทีเพื่อรับ 1 แต้ม!
+          </p>
+          <p className="mt-1 text-center text-[10px] text-white/45">
+            เวลาสะสมทั้งหมดในโหมดอิสระ {Math.floor(bankedNow)} นาที
+          </p>
+        </div>
+      )}
+
       {!isFocusActive && (
         <>
+          <section className="space-y-3">
+            <SectionTitle accent={1}>โหมดจับเวลา</SectionTitle>
+            <Card accent={1}>
+              <div className="grid grid-cols-2 gap-2">
+                <Chip accent={2} active={!free} onClick={() => setSessionMode('targeted')}>
+                  ตั้งเป้าหมาย
+                </Chip>
+                <Chip accent={3} active={free} onClick={() => setSessionMode('free')}>
+                  อิสระ
+                </Chip>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-white/65">
+                {free
+                  ? `นับเวลาขึ้นไปเรื่อย ๆ ไม่มีเป้าหมาย หยุดเมื่อไหร่ก็ได้ ทุก ${FREE_MINUTES_PER_POINT} นาทีที่สะสมได้ 1 แต้ม เวลาที่ไม่ครบจะถูกเก็บไว้ต่อในครั้งถัดไป ไม่หายไป`
+                  : 'ตั้งเวลาเป้าหมายไว้ล่วงหน้า ทำครบได้โบนัสเพิ่มและมีโอกาสได้ไอเทม'}
+              </p>
+            </Card>
+          </section>
+
+          {!free && (
           <section className="space-y-3">
             <SectionTitle accent={2}>ตั้งเป้าหมาย</SectionTitle>
             <Card accent={2}>
@@ -166,6 +257,7 @@ export function Focus() {
               </div>
             </Card>
           </section>
+          )}
 
           <section className="space-y-3">
             <SectionTitle accent={3}>กำลังทำอะไร</SectionTitle>
@@ -188,18 +280,20 @@ export function Focus() {
       )}
 
       {isFocusActive ? (
+        // Stopping a free session banks the time, so it is a confirmation
+        // rather than a cancellation and must not be styled as a loss.
         <Button
-          variant="secondary"
-          accent={3}
+          variant={free ? 'outline' : 'secondary'}
+          accent={free ? 2 : 3}
           className="w-full py-4"
-          vibrate={HAPTIC.warn}
+          vibrate={free ? HAPTIC.success : HAPTIC.warn}
           onClick={() => void endFocus(false)}
         >
-          ยกเลิกเซสชัน
+          {free ? '⏹ หยุดและเก็บเวลา' : 'ยกเลิกเซสชัน'}
         </Button>
       ) : (
         <Button accent={1} className="w-full py-5 text-base" onClick={startFocus}>
-          เริ่ม {targetMinutes} นาที
+          {free ? 'เริ่มจับเวลาอิสระ' : `เริ่ม ${targetMinutes} นาที`}
         </Button>
       )}
 

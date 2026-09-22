@@ -58,6 +58,8 @@ async function seedUser(uid, participantId, opts = {}) {
     generation: opts.generation ?? 1,
     level: 4,
     totalFocusMinutes: opts.total ?? 120,
+    freeMinutesTotal: 23,
+    freePointsAwarded: 2,
     streakDays: 3,
     isAlive: opts.alive !== false,
     diedAt: opts.alive === false ? base + DAY * 3 : null,
@@ -78,6 +80,7 @@ async function seedUser(uid, participantId, opts = {}) {
       // One interrupted session per participant, so the export's data-quality
       // split has something to report.
       source: i === 1 ? 'web_timer_interrupted' : 'web_timer_verified',
+      mode: i === 2 ? 'free' : 'targeted',
     })
   }
 

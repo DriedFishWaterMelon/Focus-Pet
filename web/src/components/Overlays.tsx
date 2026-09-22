@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Burst, ScreenFlash } from './Burst'
 import { BackgroundWord, FloatingShapes, Marquee } from './Decor'
 import { PetCanvas } from './PetCanvas'
-import { ConsentSheet, ParticipantIdIssued } from './ConsentSheet'
+import { ConsentSheet } from './ConsentSheet'
 import { Button, Card, Modal, TextInput } from './ui'
 import { HAPTIC, accentAt, clashAt, haptic, readableOn } from '../lib/design'
 import { defaultPet } from '../lib/gameLogic'
@@ -68,14 +68,13 @@ export function SpeciesPicker({
  * consent only once someone has designed and named a companion would lean on
  * sunk cost, and consent given under that pressure is not freely given.
  */
-type Step = 'intro' | 'consent' | 'participantId' | 'species' | 'name'
+type Step = 'intro' | 'consent' | 'species' | 'name'
 
-const STEP_ORDER: Step[] = ['intro', 'consent', 'participantId', 'species', 'name']
+const STEP_ORDER: Step[] = ['intro', 'consent', 'species', 'name']
 
 const BACKDROP: Record<Step, string> = {
   intro: 'HI',
   consent: 'READ',
-  participantId: 'CODE',
   species: 'PICK',
   name: 'NAME',
 }
@@ -85,22 +84,18 @@ export function Onboarding() {
   const giveConsent = useAppStore((s) => s.giveConsent)
   const declineConsent = useAppStore((s) => s.declineConsent)
   const issueParticipantId = useAppStore((s) => s.issueParticipantId)
-  const issuedCode = useAppStore((s) => s.profile?.participantId ?? null)
   const [step, setStep] = useState<Step>('intro')
   const [claiming, setClaiming] = useState(false)
-  const [claimError, setClaimError] = useState<string | undefined>(undefined)
   const [name, setName] = useState('')
   const [species, setSpecies] = useState<PetSpecies>('leaf')
   const [saving, setSaving] = useState(false)
 
   const preview = defaultPet({ name: name.trim() || 'เจ้าตัวน้อย', species })
 
+  // Failure is reported by the store as a toast, and Settings offers a retry,
+  // so onboarding does not stop for it.
   async function issueCode() {
-    setClaiming(true)
-    setClaimError(undefined)
-    const result = await issueParticipantId()
-    setClaiming(false)
-    if (!result.ok) setClaimError(result.message)
+    await issueParticipantId()
   }
 
   function finish() {
@@ -125,8 +120,13 @@ export function Onboarding() {
             onAgree={async () => {
               setClaiming(true)
               await giveConsent()
-              setStep('participantId')
-              await issueCode()
+              setClaiming(false)
+              setStep('species')
+              // The code is issued in the background and shown in Settings.
+              // A tester found a dedicated screen for it confusing: there is
+              // nothing to decide there, so it was a step that only added
+              // friction between consenting and meeting the pet.
+              void issueCode()
             }}
             onDecline={async () => {
               setClaiming(true)
@@ -137,17 +137,7 @@ export function Onboarding() {
           />
         )}
 
-        {step === 'participantId' && (
-          <ParticipantIdIssued
-            code={issuedCode || null}
-            busy={claiming}
-            error={claimError}
-            onRetry={() => void issueCode()}
-            onContinue={() => setStep('species')}
-          />
-        )}
-
-        {step !== 'consent' && step !== 'participantId' && (
+        {step !== 'consent' && (
         <Card accent={STEP_ORDER.indexOf(step)} className="p-6">
           {step === 'intro' && (
             <div className="text-center">
