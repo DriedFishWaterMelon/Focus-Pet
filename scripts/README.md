@@ -136,6 +136,17 @@ firebase emulators:exec --only firestore --project focus-pet-g8 \
 `^FP-[2-9A-HJKMNP-TV-Z]{5}$` ซึ่งตรงกับตัวสร้างรหัสในแอปพอดี
 ผู้ตอบจึงกรอกรหัสผิดรูปแบบไม่ได้ตั้งแต่ต้นทาง
 
+**ฟอร์มที่สร้างแล้ว (ใช้งานจริง)**
+
+| | |
+|---|---|
+| ลิงก์ฟอร์ม | https://docs.google.com/forms/d/e/1FAIpQLScI0bdP-7T1BJbvjPP0v5I8Yp2y20L6uGjEjvH_N3O_zlxTlw/viewform |
+| Entry ID ของช่องรหัส | `entry.1049877445` |
+| ต่อเข้าแอปแล้ว | `web/src/lib/survey.ts` |
+
+ผู้เข้าร่วมไม่ต้องเปิดลิงก์นี้เอง — ในแอปมีปุ่ม **"ทำแบบสอบถาม"** ทั้งในหน้าตั้งค่า
+และหน้าสถิติ กดแล้วเปิดฟอร์มพร้อมกรอกรหัสให้อัตโนมัติ
+
 **สิ่งที่ต้องส่งกลับให้ทีมพัฒนา**
 
 บรรทัด `PREFILL URL:` ใน Execution log — ในลิงก์นั้นมีเลข `entry.xxxxxxxxx`

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   CODE_PREFIX,
+  CONTACT_IS_PLACEHOLDER,
+  RESEARCH_CONTACT_EMAIL,
   CONSENT_CHECKS,
   CONSENT_SHEET,
   CONSENT_VERSION,
@@ -43,6 +45,16 @@ describe('generateParticipantId', () => {
     expect(isGeneratedId('FP-ABC')).toBe(false)
     expect(isGeneratedId('FP-ILOU1')).toBe(false)
     expect(isGeneratedId('')).toBe(false)
+  })
+})
+
+describe('research contact', () => {
+  it('is a real address, not the placeholder', () => {
+    // Shipping the consent sheet with no way to reach the team would leave
+    // participants unable to ask questions or withdraw, which the sheet
+    // promises they can. This fails the build rather than the study.
+    expect(CONTACT_IS_PLACEHOLDER).toBe(false)
+    expect(RESEARCH_CONTACT_EMAIL).toMatch(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)
   })
 })
 

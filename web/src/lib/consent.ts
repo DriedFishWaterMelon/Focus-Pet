@@ -15,13 +15,19 @@ export const CONSENT_VERSION = '2026-09-21.v1'
  * Contact address shown on the consent sheet.
  *
  * Research ethics requires a real, monitored contact a participant can reach
- * with questions or to withdraw. This placeholder must be replaced before the
- * study opens to anyone outside the team — the app surfaces a visible warning
- * while it is still unset.
+ * with questions or to withdraw. This address appears on a public web page, so
+ * whoever owns it should expect mail from participants — and from anyone else
+ * who opens the site.
  */
-export const RESEARCH_CONTACT_EMAIL = 'RESEARCH_TEAM_EMAIL_NOT_SET'
+export const RESEARCH_CONTACT_EMAIL: string = 'achirawat.bu@kkumail.com'
 
+/**
+ * Guards against shipping the consent sheet with no way to reach the team.
+ * Typed as string above so this stays a real runtime check rather than being
+ * narrowed to a constant `false` once a real address is filled in.
+ */
 export const CONTACT_IS_PLACEHOLDER =
+  !RESEARCH_CONTACT_EMAIL.includes('@') ||
   RESEARCH_CONTACT_EMAIL === 'RESEARCH_TEAM_EMAIL_NOT_SET'
 
 export interface ConsentSection {

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackgroundWord, FloatingShapes } from '../components/Decor'
 import { Button, Card, EmptyState, SectionTitle, StatTile, TextInput } from '../components/ui'
-import { HAPTIC, accentAt, clashAt } from '../lib/design'
+import { HAPTIC, accentAt, clashAt, haptic } from '../lib/design'
+import { surveyUrlFor } from '../lib/survey'
 import {
   downloadCsv,
   fetchScreenTimeDays,
@@ -76,6 +77,7 @@ export function Stats() {
   }
 
   const participantId = profile?.participantId || 'UNASSIGNED'
+  const surveyUrl = profile ? surveyUrlFor(profile.participantId) : null
   const maxMinutes = Math.max(600, ...days.map((d) => d.minutes))
 
   return (
@@ -125,6 +127,41 @@ export function Stats() {
           </p>
         </Card>
       </section>
+
+      {surveyUrl && (
+        <section className="space-y-3">
+          <SectionTitle accent={1}>แบบสอบถามงานวิจัย</SectionTitle>
+          <Card accent={1}>
+            <p className="text-sm leading-snug text-white/75">
+              ทำ 2 รอบ คือก่อนเริ่มใช้แอป และหลังใช้ครบ 4 สัปดาห์
+              ฟอร์มจะกรอกรหัสผู้เข้าร่วมให้อัตโนมัติ
+            </p>
+            <a
+              href={surveyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 block"
+              onClick={() => haptic(HAPTIC.tap)}
+            >
+              <div
+                className="rounded-2xl border-4 px-4 py-3 text-center transition-transform active:scale-95"
+                style={{
+                  borderColor: '#FFE600',
+                  background: '#00F5D422',
+                  boxShadow: '4px 4px 0 #00F5D4',
+                }}
+              >
+                <span
+                  className="text-sm font-black uppercase"
+                  style={{ fontFamily: 'var(--font-display)', color: '#00F5D4' }}
+                >
+                  📝 เปิดแบบสอบถาม
+                </span>
+              </div>
+            </a>
+          </Card>
+        </section>
+      )}
 
       <section className="space-y-3">
         <SectionTitle accent={4}>เวลาหน้าจอรายวัน</SectionTitle>

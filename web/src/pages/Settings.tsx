@@ -4,6 +4,7 @@ import { FloatingShapes } from '../components/Decor'
 import { SpeciesPicker } from '../components/Overlays'
 import { Button, Card, SectionTitle, TextInput } from '../components/ui'
 import { RESEARCH_CONTACT_EMAIL } from '../lib/consent'
+import { surveyUrlFor } from '../lib/survey'
 import { HAPTIC, accentAt, haptic } from '../lib/design'
 import type { EnrolmentStatus } from '../lib/types'
 import { useAppStore } from '../store/useAppStore'
@@ -44,6 +45,9 @@ export function Settings() {
   const status: EnrolmentStatus = enrolment?.status ?? 'undecided'
   const idLocked = Boolean(enrolment?.participantIdSetAt)
   const needsId = status === 'consented' && !profile?.participantId
+  // Only offered once there is a code to prefill; see surveyUrlFor.
+  const surveyUrl =
+    status === 'consented' ? surveyUrlFor(profile?.participantId ?? '') : null
 
   async function issueCode() {
     setClaiming(true)
@@ -133,6 +137,40 @@ export function Settings() {
                 >
                   ⚠️ ยังไม่มีรหัสผู้เข้าร่วม ข้อมูลของคุณจะยังไม่ถูกนำไปวิเคราะห์
                 </p>
+              )}
+
+              {surveyUrl && (
+                <a
+                  href={surveyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 block"
+                  onClick={() => haptic(HAPTIC.tap)}
+                >
+                  <div
+                    className="flex items-center justify-between gap-2 rounded-2xl border-4 px-4 py-3 transition-transform active:scale-95"
+                    style={{
+                      borderColor: '#FFE600',
+                      background: '#00F5D422',
+                      boxShadow: '4px 4px 0 #00F5D4',
+                    }}
+                  >
+                    <span className="text-left">
+                      <span
+                        className="block text-sm font-black uppercase"
+                        style={{ fontFamily: 'var(--font-display)', color: '#00F5D4' }}
+                      >
+                        📝 ทำแบบสอบถามงานวิจัย
+                      </span>
+                      <span className="block text-[10px] font-bold text-white/60">
+                        เปิดฟอร์มพร้อมกรอกรหัสให้แล้ว ไม่ต้องพิมพ์เอง
+                      </span>
+                    </span>
+                    <span aria-hidden className="text-xl" style={{ color: '#FFE600' }}>
+                      ›
+                    </span>
+                  </div>
+                </a>
               )}
 
               {idLocked && (
